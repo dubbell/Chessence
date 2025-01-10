@@ -24,12 +24,12 @@ POS = slice(2, 4)
 
 DIAGONAL_DIRS = np.array(
     [(rank_diff, file_diff)
-     for rank_diff in [-1, 1]
-     for file_diff in [-1, 1]])
+     for rank_diff in [1, -1]
+     for file_diff in [1, -1]])
 
 LATERAL_DIRS = np.array(
     [(rank_diff, file_diff) 
-     for rank_diff, file_diff in zip([0, -1, 0, 1], [-1, 0, 1, 0])])
+     for rank_diff, file_diff in zip([0, -1, 1, 0], [-1, 0, 0, 1])])
 
 KNIGHT_DIFFS = np.array(
     [(rank_diff * rank_sign, file_diff * file_sign)
@@ -46,6 +46,18 @@ def print_piece(piece : np.array):
         print(None)
     else:
         print(TEAM_NAMES[piece[TEAM]], PIECE_NAMES[piece[TYPE]], piece[POS])
+
+def print_board(board : np.array):
+    print(np.array([[piece_char(piece) for piece in rank] for rank in board]))
+
+def piece_char(piece : np.array):
+    return (" " if piece is None else
+            "K" if piece[TYPE] == KING else
+            "Q" if piece[TYPE] == QUEEN else
+            "R" if piece[TYPE] == ROOK else
+            "N" if piece[TYPE] == KNIGHT else 
+            "B" if piece[TYPE] == BISHOP else
+            "P")
 
 def within_bounds(pos : np.array):
     return pos[0] >= 0 and pos[0] <= 7 and pos[1] >= 0 and pos[1] <= 7
@@ -102,9 +114,9 @@ class ChessGame:
            then searches in all `directions` and returns the pieces that it finds. If they are specified, then the
            direction from which the piece was found is returned.
            
-           Returns: was_found, direction
+           Returns: direction / None (for searching specific piece)
                     or
-                    pieces"""
+                    pieces (for searching all given directions)"""
         
         # located pieces
         located = [None for _ in range(len(directions))]
@@ -118,16 +130,19 @@ class ChessGame:
         else:
             exit_condition = None
 
-        remaining = np.arange(len(directions))
+        # remaining directions to continue checking
+        remaining = np.array([True for _ in range(len(directions))])
         
         for dist in range(1, 8):
-            if len(remaining) == 0:
+            if not remaining.any():
                 break
+
             positions = pos + directions[remaining] * dist
-            for pos_i, (position_rank, position_file) in enumerate(positions):
+
+            for pos_i, (position_rank, position_file) in zip(np.arange(len(directions))[remaining], positions):
                 # out of bounds
                 if not within_bounds(position_rank, position_file):
-                    remaining = np.delete(remaining, pos_i)  # remove direction
+                    remaining[pos_i] = False  # remove direction
                     continue
 
                 piece = self.board[position_rank, position_file]
@@ -139,13 +154,15 @@ class ChessGame:
                     return True
                 # piece blocks
                 else:
-                    located[remaining[pos_i]] = piece
-                    remaining = np.delete(remaining, pos_i)  # remove direction
-            
+                    located[pos_i] = piece
+                    remaining[pos_i] = False  # remove direction
+
         return False if exit_condition != None else located
 
 
     def is_controlled_by(self, pos : np.array, team : int):
+        """True if given square is being controlled by given team."""
+
         rank, file = pos
         pieces = self.pieces[team]
         
@@ -165,20 +182,36 @@ class ChessGame:
             if knight[POS] in knight_threats:
                 return True
         
-        return (self.search_directions(pos, team, DIAGONAL_DIRS, [BISHOP, QUEEN]) 
-            or self.search_directions(pos, team, LATERAL_DIRS, [ROOK, QUEEN]))
+        return (self.search_directions(pos, team, DIAGONAL_DIRS, [BISHOP, QUEEN] is not None) 
+             or self.search_directions(pos, team, LATERAL_DIRS, [ROOK, QUEEN]) is not None)
     
 
-    def is_pinned(self, piece : np.array):
-        """Checks if piece is pinned, and returns the direction of the responsible piece."""
+    def find_pin(self, piece : np.array, king_team : int):
+        """Checks if piece is pinned, and returns the direction of the responsible piece. Returns None otherwise."""
         pos = piece[POS]
-        for directions, types in zip([DIAGONAL_DIRS, LATERAL_DIRS], [[BISHOP, QUEEN], [ROOK, QUEEN]]):
-            for direction in directions:
-                if (self.search_directions(pos, piece[TEAM], [direction], [KING])
-                  and self.search_directions(pos, other_team(piece[TEAM]), [-direction], types)):
-                    return True, -direction
         
-        return False, None
+        directions = np.vstack((DIAGONAL_DIRS, LATERAL_DIRS))
+        visible_pieces = self.search_directions(pos, directions)
+        for piece_index, piece in enumerate(visible_pieces):
+            if piece[TYPE] == KING and piece[TEAM] == king_team:
+                opposite_index = (piece_index + 
+                    3 if piece_index in [0, 4] else
+                    1 if piece_index in [1, 5] else
+                   -1 if piece_index in [2, 6] else -3)
+
+                opposite = visible_pieces[opposite_index]
+                
+                if opposite is None:
+                    return None
+                elif (opposite[TEAM] == other_team(king_team) and (
+                           opposite[TYPE] in [BISHOP, QUEEN] and opposite_index <= 3
+                        or opposite[TYPE] in [ROOK, QUEEN] and opposite_index >= 4)):
+                    
+                    return directions[opposite_index]
+                else:
+                    return None
+
+        return None
 
 
 
@@ -195,7 +228,5 @@ class ChessGame:
         self.status = status
 
 
-game = ChessGame()
+print(LATERAL_DIRS)
 print(DIAGONAL_DIRS)
-for piece in game.search_directions(np.array([2, 2]), DIAGONAL_DIRS):
-    print_piece(piece)
