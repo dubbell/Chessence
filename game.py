@@ -1,6 +1,6 @@
 import numpy as np
 from collections.abc import Callable
-from typing import List
+from typing import List, Union, Tuple
 
 WHITE = 0
 BLACK = 1
@@ -42,6 +42,19 @@ class Move:
         self.piece_type = piece_type
 
 
+
+
+# bounds checking -----------
+
+def within_bounds(*args : Union[Tuple[int], Tuple[np.array]]) -> bool:
+    """True if position is within the bounds of the chess board."""
+    rank, file = args[0] if len(args) == 1 else args
+    return rank >= 0 and rank <= 7 and file >= 0 and file <= 7
+
+def out_of_bounds(pos : Union[Tuple[int], Tuple[np.array]]) -> bool:
+    """Complement of within_bounds."""
+    return not within_bounds(pos)
+
 # searching ----------
     
 def locate(sub_board : np.array) -> np.array:
@@ -57,12 +70,21 @@ def locate_first(piece_states : np.array) -> np.array:
             if piece_states[rank, file] > 0:
                 return np.array([rank, file])
 
+def knight_jumps(pos : np.array):
+    """How the knight can jump from a given position"""
+    return np.array([knight_pos for knight_pos in pos + 
+                     np.array([(rank_diff, file_diff) 
+                               for rank_diff in [-2, -1, 1, 2]
+                               for file_diff in [-2, -1, 1, 2]
+                               if abs(rank_diff) != abs(file_diff)])
+                     if within_bounds(knight_pos)])
+
 def resolve_piece(square : np.array):
     """Given square, returns TEAM, PIECE_TYPE."""
     index = square.argmax()
     return index // 6, index % 6
 
-def cast_rays(board : np.array, pos : np.array, dirs : np.array, search_condition : Callable[[np.array], bool] = None):
+def cast_rays(board : np.array, cast_pos : np.array, dirs : np.array, search_condition : Callable[[int, int], bool] = None):
     """Search from given position by casting rays in the directions given by dirs. search_condition is function
         that specifies what is being searched for. If not None, then cast_ray returns True when an instance is found.
         If search_condition is None, then cast_ray returns all pieces that are encountered when searching dirs.
@@ -74,10 +96,11 @@ def cast_rays(board : np.array, pos : np.array, dirs : np.array, search_conditio
     remaining_dirs = [True for _ in range(len(dirs))]
 
     for distance in range(1, 8):
-        poss = pos + distance * dirs[remaining_dirs]
+        poss = cast_pos + distance * dirs[remaining_dirs]
 
         for dir_i, pos in zip(np.arange(len(dirs))[remaining_dirs], poss):
             pos_rank, pos_file = pos
+
             # check if edge of board is reached
             if out_of_bounds(pos):
                 remaining_dirs[dir_i] = False
@@ -88,7 +111,7 @@ def cast_rays(board : np.array, pos : np.array, dirs : np.array, search_conditio
                 team, piece_type = resolve_piece(board[:, pos_rank, pos_file])
                 # if something is being searched for, then check the search_condition and return True if it is met
                 if search_condition is not None:
-                    if search_condition(board[:, pos_rank, pos_file]):
+                    if search_condition(team, piece_type):
                         return True
                 # if there is no search_condition, then collect the piece and position
                 else:
@@ -98,19 +121,25 @@ def cast_rays(board : np.array, pos : np.array, dirs : np.array, search_conditio
     
     return np.array(found_pieces, dtype = object) if search_condition is None else False
 
+
 def is_controlled_by(board : np.array, pos : np.array, team : int):
-    pass
+    """Checks whether position is controlled by given team."""
+    rank, file = pos
+    team_board = board[TEAM_SLICES[team]]
 
 
-# bounds checking -----------
-
-def within_bounds(pos : np.array):
-    """True if position is within the bounds of the chess board."""
-    return (pos >= 0).all() and (pos <= 7).all()
-
-def out_of_bounds(pos : np.array):
-    """Complement of within_bounds."""
-    return not within_bounds(pos)
+    if ((rank <= 6 and team == WHITE or rank >= 1 and team == BLACK) and 
+            np.any(team_board[PAWN][
+                [rank + 1 if team == WHITE else -1 for _ in range(2)], 
+                [threat for threat in [file - 1, file + 1] if threat >= 0 and threat <= 7]])):
+        return True
+        
+    king_ranks, king_files = np.vstack((LATERAL_DIRS, DIAGONAL_DIRS)).T
+    if np.any(team_board[KING][king_ranks, king_files]):
+        return True
+    
+    return (cast_rays(board, pos, LATERAL_DIRS, lambda found_team, found_type: found_team == team and found_type in [ROOK, QUEEN]) or 
+            cast_rays(board, pos, DIAGONAL_DIRS, lambda found_team, found_type: found_team == team and found_type in [BISHOP, QUEEN]))
     
 
 # other utils -------
@@ -322,16 +351,14 @@ black_board_pop = black_board.sum(axis = 0) > 0
 
 test = np.zeros((8, 8))
 
-queen_dirs = np.vstack((DIAGONAL_DIRS, LATERAL_DIRS))
-queen_poss = locate(white_board[QUEEN])
-for queen_pos in queen_poss:
-    rank, file = queen_pos
-    test[rank, file] = 1
-    for move in get_line_moves(board, queen_dirs, queen_pos, white_board_pop, black_board_pop, WHITE):
-        from_rank, from_file, to_rank, to_file = move
-        test[to_rank, to_file] = 2
-
-
+# queen_dirs = np.vstack((DIAGONAL_DIRS, LATERAL_DIRS))
+# queen_poss = locate(white_board[QUEEN])
+# for queen_pos in queen_poss:
+#     rank, file = queen_pos
+#     test[rank, file] = 1
+#     for move in get_line_moves(board, queen_dirs, queen_pos, white_board_pop, black_board_pop, WHITE):
+#         from_rank, from_file, to_rank, to_file = move
+#         test[to_rank, to_file] = 2
 
 # pawn_poss = locate(white_board[PAWN])
 # for pawn_pos in pawn_poss:
@@ -341,6 +368,15 @@ for queen_pos in queen_poss:
 #         _, _, to_rank, to_file = move
 #         test[to_rank, to_file] = 2
 
+# for i in range(8):
+#     for j in range(8):
+#         if is_controlled_by(board, np.array([i, j]), BLACK):
+#             test[i, j] = 1
 
-    
+
+for i, j in knight_jumps(np.array([1, 4])):
+    print(i, j)
+    test[i, j] = 1
+
+
 print(test)
