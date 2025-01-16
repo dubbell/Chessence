@@ -89,7 +89,6 @@ def is_controlled_by(board : np.array, pos : np.array, team : int):
     rank, file = pos
     team_board = board[TEAM_SLICES[team]]
 
-
     if ((rank <= 6 and team == WHITE or rank >= 1 and team == BLACK) and 
             np.any(team_board[PAWN][
                 [rank + 1 if team == WHITE else -1 for _ in range(2)], 
@@ -100,5 +99,10 @@ def is_controlled_by(board : np.array, pos : np.array, team : int):
     if np.any(team_board[KING][king_ranks, king_files]):
         return True
     
+    knight_ranks, knight_files = knight_jumps(pos).T
+    if np.any(team_board[KNIGHT][knight_ranks, knight_files]):
+        return True
+    
     return (cast_rays(board, pos, LATERAL_DIRS, lambda found_team, found_type: found_team == team and found_type in [ROOK, QUEEN]) or 
             cast_rays(board, pos, DIAGONAL_DIRS, lambda found_team, found_type: found_team == team and found_type in [BISHOP, QUEEN]))
+

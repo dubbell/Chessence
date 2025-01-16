@@ -21,6 +21,8 @@ DIAGONAL_DIRS = np.array(
     for file_diff in [-1, 0, 1]
     if abs(rank_diff) + abs(file_diff) == 2])
 
+HALF_DIRS = np.array([[0, -1], [-1, -1], [-1, 0], [-1, 1]])
+
 FROM = slice(0, 2)
 TO = slice(2, None)
 
@@ -33,6 +35,17 @@ class Move:
 
 
 # move calculation -------
+
+def is_pinned_from(board : np.array, pos : np.array, dirs : np.array, team : int):
+    pin_types = [[QUEEN, BISHOP] if is_diagonal else [QUEEN, ROOK]
+                 for is_diagonal in (np.abs(dirs).sum(axis=1) == 2)]
+    forward_casts = cast_rays(board, pos, dirs)
+    backward_casts = cast_rays(board, pos, -dirs)
+    return np.array(
+      [forward is not None and backward is not None and
+       (list(forward[:2]) == [team, KING] and list(backward[:2]) in [[int(not team), t] for t in types] or 
+        list(backward[:2]) == [team, KING] and list(forward[:2]) in [[int(not team), t] for t in types])
+       for forward, backward, types in zip(forward_casts, backward_casts, pin_types)])
 
 def get_pawn_moves(pawn_pos, team_board_pop : np.array, opp_board_pop : np.array, team : int) -> List[np.array]:
     pawn_moves = []
@@ -118,58 +131,40 @@ def get_king_moves(board : np.array, king_pos : np.array, team_board_pop : np.ar
     return king_moves
 
 def get_line_moves(board : np.array, 
-                   dirs : np.array,
+                   move_dirs : np.array,
                    piece_pos : np.array,
                    team_board_pop : np.array, 
                    opp_board_pop : np.array, 
                    team : int) -> List[Move]:
     line_moves = []
+    
+    # is pinned from corresponding direction in pin_dirs
+    is_pinned = is_pinned_from(board, piece_pos, HALF_DIRS, team)
 
-    # one_dirs is one half of the lateral and diagonal directions
-    one_dirs = np.array([[0, -1], [-1, -1], [-1, 0], [-1, 1]])
-    # opposite directions of the ones in one_dirs
-    two_dirs = -one_dirs
-
-    # relevant piece types for corresponding cast (pin check)
-    relevant_types = [[ROOK, QUEEN] if np.abs(dir).sum() == 1 else [BISHOP, QUEEN] 
-                      for dir in np.vstack((one_dirs, two_dirs))]
-
-    # ray casts to check for pins
-    one_casts = cast_rays(board, piece_pos, one_dirs)  # check forwards
-    two_casts = cast_rays(board, piece_pos, two_dirs)  # check backwards
-
-    # check directions (applies both ways for each) in which the piece is allowed to move, based on pins
-    remaining_dirs = np.array([True for _ in range(len(dirs))])
-    for dir_i, candidate_dir in enumerate(dirs):
-        # casts for which a pin would prevent movement in candidate_dir
-        pin_casts = np.logical_not(
+    remaining_dirs = np.array([True for _ in range(len(move_dirs))])
+    for move_dir_i, move_dir in enumerate(move_dirs):
+        # casts for which a pin would prevent movement in move_dir
+        relevant_dirs = np.logical_not(
             np.logical_or(
-                (candidate_dir == one_dirs).all(axis=1),
-                (candidate_dir == two_dirs).all(axis=1)))
+                (move_dir == HALF_DIRS).all(axis=1),
+                (move_dir == -HALF_DIRS).all(axis=1)))
         
-        # if there's a pin in any of the pin_casts, then disallow movement in candidate_dir
-        if np.any([list(forward[:2]) == [team, KING] and list(backward[:2]) in [[int(not team), t] for t in types]
-                    or list(backward[:2]) == [team, KING] and list(forward[:2]) in [[int(not team), t] for t in types]
-                for forward, backward, types in zip(one_casts[pin_casts], two_casts[pin_casts], relevant_types)
-                if forward is not None and backward is not None]):
-        
-            remaining_dirs[dir_i] = False   
+        remaining_dirs[move_dir_i] = not np.any(is_pinned[relevant_dirs])
             
     # search and add moves along allowed directions until edge of board or a piece is found
     steps = 1
     while remaining_dirs.any():
-        poss = piece_pos + steps * dirs[remaining_dirs]
+        move_poss = piece_pos + steps * move_dirs[remaining_dirs]
         steps += 1
-        for pos_i, pos in zip(np.arange(len(dirs))[remaining_dirs], poss):
-            pos_rank, pos_file = pos
-            if out_of_bounds(pos) or team_board_pop[pos_rank, pos_file]:
-                remaining_dirs[pos_i] = False
+        for move_pos_i, move_pos in zip(np.arange(len(move_dirs))[remaining_dirs], move_poss):
+            pos_rank, pos_file = move_pos
+            if out_of_bounds(move_pos) or team_board_pop[pos_rank, pos_file]:
+                remaining_dirs[move_pos_i] = False
                 continue
             elif opp_board_pop[pos_rank, pos_file]:
-                remaining_dirs[pos_i] = False
+                remaining_dirs[move_pos_i] = False
             
-            line_moves.append(pos)
-            
+            line_moves.append(move_pos)
     
     return np.array(line_moves)
 
@@ -196,6 +191,15 @@ def get_moves(board : np.array, team : int):
     for piece_type, dirs in ([QUEEN, ROOK, BISHOP], [np.vstack((LATERAL_DIRS, DIAGONAL_DIRS)), LATERAL_DIRS, DIAGONAL_DIRS]):
         for piece_pos in locate(team_board[piece_type]):
             available_moves.extend([Move(piece_pos, to_pos, piece_type) for to_pos in get_line_moves(board, dirs, piece_pos, team_board_pop, opp_board_pop, team)])
+    
+    # knight moves
+    for knight_pos in locate(team_board[KNIGHT]):
+        # add moves if no pins
+        if not np.any(is_pinned_from(board, knight_pos, HALF_DIRS)):
+            available_moves.extend(
+               [Move(knight_pos, to_pos, KNIGHT)
+                for to_pos in knight_jumps(knight_pos)
+                if not team_board_pop[to_pos[0], to_pos[1]]])
 
     return available_moves
             
@@ -205,7 +209,7 @@ def get_moves(board : np.array, team : int):
 board, white_board, black_board = get_starting_board()
 white_board[PAWN][6, 3] = 0
 white_board[PAWN][6, 2] = 0
-white_board[QUEEN][5, 6] = 1
+white_board[QUEEN][5, 4] = 1
 # black_board[BISHOP][5, 3] = 1
 
 white_board_pop = white_board.sum(axis = 0) > 0
@@ -230,15 +234,17 @@ test = np.zeros((8, 8))
 #         _, _, to_rank, to_file = move
 #         test[to_rank, to_file] = 2
 
-# for i in range(8):
-#     for j in range(8):
-#         if is_controlled_by(board, np.array([i, j]), BLACK):
-#             test[i, j] = 1
+for i in range(8):
+    for j in range(8):
+        if is_controlled_by(board, np.array([i, j]), BLACK):
+            test[i, j] = 1
 
 
-for i, j in knight_jumps(np.array([1, 4])):
-    print(i, j)
-    test[i, j] = 1
+# for i, j in knight_jumps(np.array([1, 4])):
+#     print(i, j)
+#     test[i, j] = 1
 
 
 print(test)
+
+# print(is_pinned_from(board, np.array([1, 4]), np.vstack((LATERAL_DIRS, DIAGONAL_DIRS)), BLACK))
