@@ -33,3 +33,6 @@ def within_bounds(*args : Union[Tuple[int], Tuple[np.array]]) -> bool:
 def out_of_bounds(*args : Union[Tuple[int], Tuple[np.array]]) -> bool:
     """Complement of within_bounds."""
     return not within_bounds(args)
+
+def opponent(team : Team):
+    return Team.WHITE if team == Team.BLACK else Team.BLACK

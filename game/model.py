@@ -1,4 +1,6 @@
 from enum import Enum
+from typing import List
+import numpy as np
 
 
 class Team(Enum):
@@ -16,10 +18,13 @@ class Type(Enum):
 class Piece:
     team : Team
     type : Type
+    pins : List[np.array]
 
     def __init__(self, team : Team = None, type : Type = None):
         self.team = team
         self.type = type
+        self.pins = []
+        
 
     def __repr__(self):
         if self.team is None or self.type is None:
@@ -29,5 +34,3 @@ class Piece:
     
     def __eq__(self, other):
         return other.team == self.team and other.type == self.type
-
-print(Piece(Team.BLACK, Type.ROOK) == Piece(Team.BLACK, Type.ROOK))
