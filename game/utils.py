@@ -4,21 +4,32 @@ from typing import Union, Tuple
 
 
 def get_starting_board():
-    return np.array(
-      [[Piece(Team.BLACK, Type.ROOK) if (rank, file) in [(0, 0), (0, 7)] else
-        Piece(Team.BLACK, Type.KNIGHT) if (rank, file) in [(0, 1), (0, 6)] else
-        Piece(Team.BLACK, Type.BISHOP) if (rank, file) in [(0, 2), (0, 5)] else
-        Piece(Team.BLACK, Type.QUEEN) if (rank, file) == (0, 3) else
-        Piece(Team.BLACK, Type.BISHOP) if (rank, file) == (0, 4) else
-        Piece(Team.BLACK, Type.PAWN) if rank == 1 else
-        Piece(Team.WHITE, Type.ROOK) if (rank, file) in [(7, 0), (7, 7)] else
-        Piece(Team.WHITE, Type.KNIGHT) if (rank, file) in [(7, 1), (7, 6)] else
-        Piece(Team.WHITE, Type.BISHOP) if (rank, file) in [(7, 2), (7, 5)] else
-        Piece(Team.WHITE, Type.QUEEN) if (rank, file) == (7, 3) else
-        Piece(Team.WHITE, Type.BISHOP) if (rank, file) == (7, 4) else
-        Piece(Team.WHITE, Type.PAWN) if rank == 6 else
-        None for file in range(8)] 
-       for rank in range(8)])
+    pieces = { team : { Type(t_i) : [] for t_i in range(1, 6) } for team in [Team.WHITE, Team.BLACK]}
+    board = [[None for _ in range(8)] for _ in range(8)]
+    for rank in range(8):
+        for file in range(8):
+            piece = Piece(Team.BLACK, Type.ROOK, rank, file) if (rank, file) in [(0, 0), (0, 7)] else \
+                    Piece(Team.BLACK, Type.KNIGHT, rank, file) if (rank, file) in [(0, 1), (0, 6)] else \
+                    Piece(Team.BLACK, Type.BISHOP, rank, file) if (rank, file) in [(0, 2), (0, 5)] else \
+                    Piece(Team.BLACK, Type.QUEEN, rank, file) if (rank, file) == (0, 3) else \
+                    Piece(Team.BLACK, Type.BISHOP, rank, file) if (rank, file) == (0, 4) else \
+                    Piece(Team.BLACK, Type.PAWN, rank, file) if rank == 1 else \
+                    Piece(Team.WHITE, Type.ROOK, rank, file) if (rank, file) in [(7, 0), (7, 7)] else \
+                    Piece(Team.WHITE, Type.KNIGHT, rank, file) if (rank, file) in [(7, 1), (7, 6)] else \
+                    Piece(Team.WHITE, Type.BISHOP, rank, file) if (rank, file) in [(7, 2), (7, 5)] else \
+                    Piece(Team.WHITE, Type.QUEEN, rank, file) if (rank, file) == (7, 3) else \
+                    Piece(Team.WHITE, Type.BISHOP, rank, file) if (rank, file) == (7, 4) else \
+                    Piece(Team.WHITE, Type.PAWN, rank, file) if rank == 6 else \
+                    None
+            
+            if piece is not None:
+                if piece.type == Type.KING:
+                    pieces[piece.team][Type.KING] = piece
+                else:
+                    pieces[piece.team][piece.type].append(piece)
+            board[rank][file] = piece
+        
+    return pieces, np.array(board)
 
 
 def print_board(board : np.array):
@@ -36,3 +47,9 @@ def out_of_bounds(*args : Union[Tuple[int], Tuple[np.array]]) -> bool:
 
 def opponent(team : Team):
     return Team.WHITE if team == Team.BLACK else Team.BLACK
+
+
+pieces, board = get_starting_board()
+
+print(pieces)
+print(board.shape)

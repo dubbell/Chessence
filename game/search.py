@@ -10,15 +10,33 @@ def locate_first(board : np.array, team : Team, type : Type) -> np.array:
                 return np.array([rank, file])
 
 def locate(board : np.array, team : Team, types : List[Type]) -> Tuple[List[np.array], List[Piece]]:
-    poss = []
+    coords = []
     pieces = []
     for rank in range(8):
         for  file in range(8):
             if board[rank, file] in [Piece(team, t) for t in types]:
-                poss.append(np.array([rank, file]))
+                coords.append(np.array([rank, file]))
                 pieces.append(board[rank, file])
     
-    return poss, pieces
+    return coords, pieces
+
+def locate_all(board : np.array) -> map:
+    piece_map = { Type.WHITE : {}, Type.BLACK : {} }
+    for t in [Type.QUEEN, Type.ROOK, Type.BISHOP, Type.KNIGHT, Type.PAWN]:
+        piece_map[Type.WHITE][t] = []
+        piece_map[Type.BLACK][t] = []
+
+    for rank in range(8):
+        for file in range(8):
+            piece = board[rank, file]
+            if piece is not None:
+                if piece.type == Type.KING:
+                    piece_map[piece.team][piece.type] = (piece, np.array([rank, file]))
+                else:
+                    piece_map[piece.team][piece.type].append((piece, np.array([rank, file])))
+
+    return piece_map
+
 
 def cast_rays(board : np.array, 
               origin : np.array, 
@@ -37,18 +55,18 @@ def cast_rays(board : np.array,
     dist = 1
     remaining_dirs = np.array([True for _ in range(len(dirs))])
     while remaining_dirs.any():
-        poss = origin + dist * dirs[remaining_dirs]
+        coords = origin + dist * dirs[remaining_dirs]
         dist += 1
 
-        for pos, dir_i in zip(poss, np.arange(len(dirs))[remaining_dirs]):
+        for coord, dir_i in zip(coords, np.arange(len(dirs))[remaining_dirs]):
             if collect_all:
-                covered[dir_i].append(pos)
-                if board[*pos] is not None:
-                    hits.append(board[*pos])
+                covered[dir_i].append(coord)
+                if board[*coord] is not None:
+                    hits.append(board[*coord])
                     remaining_dirs[dir_i] = False
-            elif board[*pos] is not None:
-                covered.append(pos)
-                hits[dir_i] = board[*pos]
+            elif board[*coord] is not None:
+                covered.append(coord)
+                hits[dir_i] = board[*coord]
                 remaining_dirs[dir_i] = False
     
     return covered, hits

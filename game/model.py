@@ -19,10 +19,12 @@ class Piece:
     team : Team
     type : Type
     pins : List[np.array]
+    coord : np.array
 
-    def __init__(self, team : Team = None, type : Type = None):
+    def __init__(self, team : Team, type : Type, rank : int, file : int):
         self.team = team
         self.type = type
+        self.coord = np.array([rank, file])
         self.pins = []
         
 
