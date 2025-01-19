@@ -1,4 +1,4 @@
-from move import Board
+from model import Board
 from constants import *
 
 queen_corner_ = np.array([
@@ -93,7 +93,7 @@ def king_state(board : Board, team : int):
 
     # populate neighbours with team pieces
     for diff in team_diffs:
-        if diff.abs().sum() == 1 and (diff == 0).any() or diff.abs().sum() == 2:
+        if np.abs(diff).sum() == 1 and (diff == 0).any() or np.abs(diff).sum() == 2:
             neighbours[*(diff + 1)] = -1
 
     # first pieces found in each diagonal line, only considering one direction
@@ -129,7 +129,7 @@ def king_state(board : Board, team : int):
     for piece_type, piece_team, diff in zip(board.types[int(not team)], 
                                             [WHITE for _ in range(len(team_diffs))] + [BLACK for _ in range(len(oppo_diffs))], 
                                             np.vstack((team_diffs, oppo_diffs))):
-        diff_abs = diff.abs()
+        diff_abs = np.abs(diff)
         diff_sum = diff.sum()
         diff_dif = diff[0] - diff[1]
 
@@ -251,7 +251,7 @@ def king_state(board : Board, team : int):
         for file in range(-1, 2)])
 
     # order in which the squares appear in the diagonals, concatenated
-    king_square_orders = np.concatenate(np.array([
+    diag_king_square_orders = np.concatenate(np.array([
         np.arange(10)[
             [rank + file == x for x in range(-2, 3)] +
             [rank - file == x for x in range(-2, 3)]]
@@ -259,7 +259,7 @@ def king_state(board : Board, team : int):
 
     # mapping from diag_index to the ordered steps in which the diagonal intersects the king square
     diag_index_to_steps = \
-        [king_square_coords[np.arange(9)[king_square_orders == diag_index]]
+        [king_square_coords[np.arange(9)[diag_king_square_orders == diag_index]]
          for diag_index in range(10)]
     
     diag_pin_index_to_dir = \
@@ -306,6 +306,62 @@ def king_state(board : Board, team : int):
                     break
     
 
-    # remaining: knight control, opponent king control, lateral control and pins
+    # order in which the squares appear in the laterals, concatenated
+    lat_king_square_orders = np.concatenate(np.array([
+        np.arange(6)[
+            [rank == x for x in range(-1, 2)] +
+            [file == x for x in range(-1, 2)]]
+        for rank, file in king_square_coords]).T)
+
+    # mapping from diag_index to the ordered steps in which the diagonal intersects the king square
+    lat_index_to_steps = \
+        [king_square_coords[np.arange(9)[lat_king_square_orders == lat_index]]
+         for lat_index in range(6)]
+    
+    lat_pin_index_to_dir = \
+        [np.array([0, 1] if index % 2 == 0 else [1, 0]) for index in range(4)]
+
+
+    for lat_index in range(6):
+        # forward laterals
+        pin_index = 0 if lat_index == 1 else \
+                    2 if lat_index == 4 else None
+        
+        # first check pin
+        if pin_index is not None \
+                and lat_forward_team[lat_index] == team \
+                and lat_pinners[pin_index] in [QUEEN, BISHOP] \
+                and lat_pinners_team[pin_index] == int(not team):
+            pin_dir = lat_pin_index_to_dir[pin_index]
+            pin_coords.append(king_coord + int(lat_forward_dist[lat_index] / 2) * pin_dir)
+            pin_dirs.append(pin_dir)
+        
+        if lat_forward[lat_index] in [QUEEN, BISHOP]:
+            for step in lat_index_to_steps[lat_index]:
+                controlled[*step] = True
+                if neighbours[*step] != 0:
+                    break
+
+        # backward diagonals
+        pin_index = 1 if lat_index == 1 else \
+                    3 if lat_index == 4 else None
+        
+        # first check pin
+        if pin_index is not None \
+                and lat_backward_team[lat_index] == team \
+                and lat_pinners[pin_index] in [QUEEN, BISHOP] \
+                and lat_pinners_team[pin_index] == int(not team):
+            pin_dir = lat_pin_index_to_dir[pin_index]
+            pin_coords.append(king_coord + int(lat_backward_dist[lat_index] / 2) * pin_dir)
+            pin_dirs.append(pin_dir)
+        
+        if lat_backward[lat_index] in [QUEEN, BISHOP]:
+            # take steps backwards when checking backward diagonal
+            for step in lat_index_to_steps[lat_index][::-1]:
+                controlled[*step] = True
+                if neighbours[*step] != 0:
+                    break
+
+    # remaining: knight control, opponent king control
 
     return controlled, (pin_coords, pin_dirs)
