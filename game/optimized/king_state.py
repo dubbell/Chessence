@@ -130,7 +130,7 @@ def king_state(board : Board, team : int):
         if distance == 0:
             continue
         # if in 3x3 square around the king
-        if distance == 1 or distance == 2 and (diff_abs <= 1).all():
+        if (diff_abs <= 1).all():
             neighbours[*(diff + 1)] = -1 if piece_team == team else piece_type
             
 
@@ -138,6 +138,7 @@ def king_state(board : Board, team : int):
 
         # indices for laterals on which the piece lies
         lat_indices = np.arange(6)[[diff[0] == x for x in range(-1, 2)] + [diff[1] == x for x in range(-1, 2)]]
+        print(lat_indices) if len(lat_indices) > 0 else None
 
         # loop through piece's laterals
         for lat_index in lat_indices:
@@ -273,10 +274,10 @@ def king_state(board : Board, team : int):
     
     # direction of pin diagonal index
     diag_pin_index_to_dir = \
-        [np.array([-1, 1] if index % 2 == 0 else [1, 1]) for index in range(4)]
+        np.array([[1, -1], [-1, 1], [1, 1], [-1, -1]])
     
     lat_pin_index_to_dir = \
-        [np.array([0, 1] if index % 2 == 0 else [1, 0]) for index in range(4)]
+        np.array([[0, 1], [0, -1], [1, 0], [-1, 0]])
 
     # CHECK DIAGONALS
     for diag_index in range(10):
@@ -316,7 +317,7 @@ def king_state(board : Board, team : int):
             pin_dir = diag_pin_index_to_dir[pin_index]
             pin_diff = diag_backward_diff[diag_index]
             pin_coords.append(king_coord + pin_diff)
-            pin_dirs.append(-pin_dir)
+            pin_dirs.append(pin_dir)
             if (np.abs(pin_diff) <= 1).all():  # if pinned piece is next to king, then set controlled to true (workaround)
                 controlled[*(pin_diff + 1)] = 1
 
@@ -330,6 +331,7 @@ def king_state(board : Board, team : int):
                 if neighbours[*step] != 0:
                     break
 
+    print(lat_pinners)
 
     # CHECK LATERALS
     for lat_index in range(6):
@@ -340,7 +342,7 @@ def king_state(board : Board, team : int):
         # first check pin
         if pin_index is not None \
                 and lat_forward_team[lat_index] == team \
-                and lat_pinners[pin_index] in [QUEEN, BISHOP] \
+                and lat_pinners[pin_index] in [QUEEN, ROOK] \
                 and lat_pinners_team[pin_index] == int(not team):
             pin_dir = lat_pin_index_to_dir[pin_index]
             pin_diff = lat_forward_diff[lat_index]
@@ -351,8 +353,10 @@ def king_state(board : Board, team : int):
         
         elif lat_forward_team[lat_index] == int(not team) \
                 and lat_forward_type[lat_index] in [QUEEN, ROOK]:
-            for step in lat_index_to_steps[lat_index]:
+            for step in lat_index_to_steps[lat_index][::-1]:
                 controlled[*step] = 1
+                print(step)
+
                 if neighbours[*step] != 0:
                     break
 
@@ -375,7 +379,7 @@ def king_state(board : Board, team : int):
         if lat_backward_team[lat_index] == int(not team) \
                 and lat_backward_type[lat_index] in [QUEEN, ROOK]:
             # take steps backwards when checking backward diagonal
-            for step in lat_index_to_steps[lat_index][::-1]:
+            for step in lat_index_to_steps[lat_index]:
                 controlled[*step] = 1
                 if neighbours[*step] != 0:
                     break

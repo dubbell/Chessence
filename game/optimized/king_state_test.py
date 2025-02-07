@@ -9,6 +9,49 @@ from king_state import king_state
 
 class KingStateTest(unittest.TestCase):
 
+    def test_diagonal_pins(self):
+        king_coord = np.array([4, 4])
+        for i, dir in enumerate(np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]])):
+            board = Board()
+            board.add_piece(KING, WHITE, *king_coord)
+            board.add_piece(BISHOP, BLACK, *(king_coord + dir * 3))
+            board.add_piece(PAWN, WHITE, *(king_coord + dir))
+
+            controlled, pin_coords, pin_dirs = king_state(board, WHITE)
+
+            true_controlled = np.rot90(np.array([
+                [1, 0, 0],
+                [0, 0, 0],
+                [0, 0, 0]]), -i)
+
+            assert_array_equal(controlled, true_controlled)
+
+            assert_array_equal(pin_coords, [king_coord + dir])
+            assert_array_equal(pin_dirs, [dir])
+    
+
+    def test_lateral_pins(self):
+        king_coord = np.array([4, 4])
+        for i, dir in enumerate(np.array([[-1, 0], [0, 1], [1, 0], [0, -1]])):
+            board = Board()
+            board.add_piece(KING, WHITE, *king_coord)
+            board.add_piece(ROOK, BLACK, *(king_coord + dir * 3))
+            board.add_piece(PAWN, WHITE, *(king_coord + dir))
+
+            controlled, pin_coords, pin_dirs = king_state(board, WHITE)
+            print()
+
+            true_controlled = np.rot90(np.array([
+                [0, 1, 0],
+                [0, 0, 0],
+                [0, 0, 0]]), -i)
+
+            assert_array_equal(controlled, true_controlled)
+
+            assert_array_equal(pin_coords, [king_coord + dir])
+            assert_array_equal(pin_dirs, [dir])
+
+
     def test_double_bishop(self):
         board = Board()
         board.add_piece(KING, WHITE, 4, 4)
@@ -43,6 +86,7 @@ class KingStateTest(unittest.TestCase):
         assert_array_equal(pin_coords, [[3, 3]])
         assert_array_equal(pin_dirs, [[-1, -1]])
 
+
     def test_bishop_rook(self):
         board = Board()
         board.add_piece(KING, BLACK, 4, 4)
@@ -67,6 +111,8 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(BISHOP, WHITE, 1, 1)
         board.add_piece(ROOK, WHITE, 1, 5)
 
+        print(board)
+
         controlled, pin_coords, pin_dirs = king_state(board, BLACK)
 
         assert_array_equal(controlled, [
@@ -78,4 +124,6 @@ class KingStateTest(unittest.TestCase):
         assert_array_equal(pin_dirs, [])
         
 
-unittest.main()
+runner = unittest.TextTestRunner()
+# runner.run(unittest.TestLoader().loadTestsFromTestCase(KingStateTest))
+runner.run(KingStateTest('test_bishop_rook_block'))
