@@ -75,7 +75,7 @@ def king_state(board : Board, team : int):
     pin_dirs = []  # direction from which the pieces are pinned
 
     # -1 if team piece, 0 if empty, otherwise opponent piece_type (0 piece_type impossible because king)
-    neighbours = np.zeros((3, 3))
+    neighbours = np.zeros((3, 3), dtype=int)
     
     king_coord = board.coords[team][KING]
 

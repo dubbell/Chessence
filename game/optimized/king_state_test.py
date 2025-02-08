@@ -147,8 +147,177 @@ class KingStateTest(unittest.TestCase):
                     assert_array_equal(controlled, true_controlled)
                     
 
+    def test_contact_knight(self):
+        board = Board()
+        board.add_piece(KING, WHITE, 4, 4)
+        board.add_piece(KNIGHT, BLACK, 3, 3)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 0, 0],
+            [0, 0, 1],
+            [0, 1, 0]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+        board.add_piece(KNIGHT, BLACK, 5, 5)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 1, 0],
+            [1, 0, 1],
+            [0, 1, 0]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+        board.add_piece(KNIGHT, BLACK, 5, 4)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [1, 1, 1],
+            [1, 0, 1],
+            [0, 1, 0]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+        board.add_piece(KNIGHT, BLACK, 4, 3)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [1, 1, 1],
+            [1, 0, 1],
+            [0, 1, 1]])
+        
+        assert_array_equal(controlled, true_controlled)
 
 
-runner = unittest.TextTestRunner()
-runner.run(unittest.TestLoader().loadTestsFromTestCase(KingStateTest))
-# runner.run(KingStateTest('test_lateral_pins'))
+    def test_contact_bishop(self):
+        board = Board()
+        board.add_piece(KING, WHITE, 4, 4)
+        board.add_piece(BISHOP, BLACK, 3, 3)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+        board.add_piece(BISHOP, BLACK, 3, 4)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 0, 0],
+            [1, 1, 1],
+            [0, 0, 1]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+        board.add_piece(BISHOP, BLACK, 5, 3)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 0, 1],
+            [1, 1, 1],
+            [0, 0, 1]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+
+    def test_contact_rook(self):
+        board = Board()
+        board.add_piece(KING, WHITE, 4, 4)
+        board.add_piece(ROOK, BLACK, 3, 3)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 1, 1],
+            [1, 0, 0],
+            [1, 0, 0]])
+        
+        assert_array_equal(controlled, true_controlled)
+        
+        board.add_piece(PAWN, WHITE, 3, 4)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 1, 0],
+            [1, 0, 0],
+            [1, 0, 0]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+        board.add_piece(ROOK, BLACK, 3, 5)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 1, 0],
+            [1, 0, 1],
+            [1, 0, 1]])
+        
+        assert_array_equal(controlled, true_controlled)
+        
+        board.add_piece(ROOK, BLACK, 5, 5)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 1, 1],
+            [1, 0, 1],
+            [1, 1, 1]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+
+    def test_contact_queen(self):
+        board = Board()
+        board.add_piece(KING, WHITE, 4, 4)
+        board.add_piece(QUEEN, BLACK, 3, 3)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 1, 1],
+            [1, 1, 0],
+            [1, 0, 1]])
+        
+        assert_array_equal(controlled, true_controlled)
+        
+        board.add_piece(PAWN, WHITE, 4, 3)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 1, 1],
+            [1, 1, 0],
+            [0, 0, 1]])
+        
+        assert_array_equal(controlled, true_controlled)
+        
+        board.add_piece(QUEEN, BLACK, 5, 4)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 1, 1],
+            [1, 1, 1],
+            [1, 0, 1]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+
+if __name__ == "__main__":
+    runner = unittest.TextTestRunner()
+    runner.run(unittest.TestLoader().loadTestsFromTestCase(KingStateTest))
+    # runner.run(KingStateTest('test_lateral_pins'))
