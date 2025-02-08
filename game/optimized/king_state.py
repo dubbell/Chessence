@@ -132,13 +132,13 @@ def king_state(board : Board, team : int):
         # if in 3x3 square around the king
         if (diff_abs <= 1).all():
             neighbours[*(diff + 1)] = -1 if piece_team == team else piece_type
+            continue  # handle neighbor pieces differently
             
 
         # IF ON A LATERAL LINE -------------
 
         # indices for laterals on which the piece lies
         lat_indices = np.arange(6)[[diff[0] == x for x in range(-1, 2)] + [diff[1] == x for x in range(-1, 2)]]
-        print(lat_indices) if len(lat_indices) > 0 else None
 
         # loop through piece's laterals
         for lat_index in lat_indices:
@@ -224,7 +224,7 @@ def king_state(board : Board, team : int):
     # check control by opponent pawns
     for pawn_diff in oppo_diffs[board.type_locs[int(not team), -1]:]:
         pawn_coord = pawn_rank, pawn_file = pawn_diff + 1  # convert diff to control matrix coordinates
-        pawn_control_coords = pawn_coord + [[pawn_rank, pawn_file + file_diff] for file_diff in [-1, 1]]
+        pawn_control_coords = pawn_coord + [[pawn_rank + (1 if team == WHITE else -1), pawn_file + file_diff] for file_diff in [-1, 1]]
         for pawn_control_coord in pawn_control_coords:
             if (pawn_control_coord <= 2).all() and (pawn_control_coord >= 0).all():
                 controlled[*pawn_control_coord] = 1
@@ -241,7 +241,7 @@ def king_state(board : Board, team : int):
             is_corner = not (rank == 1 or file == 1)
 
             if is_corner and neighbour in [QUEEN, ROOK]:
-                # filter for blocking pieces among neighbours
+                # filter for neighbours that potentially blocks queen/rook sight along edges of 3x3 square
                 contact_block = np.ones((3, 3))
                 if neighbours[1, file] != 0:
                     contact_block[0 if rank == 2 else 2, file] = 0
@@ -272,117 +272,102 @@ def king_state(board : Board, team : int):
         lat_index_to_steps[king_square_rank + 1].append(king_square_coord + 1)
         lat_index_to_steps[king_square_file + 4].append(king_square_coord + 1)
     
-    # direction of pin diagonal index
+    # direction of pin by diagonal pin index
     diag_pin_index_to_dir = \
         np.array([[1, -1], [-1, 1], [1, 1], [-1, -1]])
     
+    # direction of pin by lateral pin index
     lat_pin_index_to_dir = \
         np.array([[0, 1], [0, -1], [1, 0], [-1, 0]])
 
     # CHECK DIAGONALS
     for diag_index in range(10):
-        # FORWARD DIAGONALS
-        pin_index = 0 if diag_index == 2 else \
-                    2 if diag_index == 7 else None
+        for check_direction in range(2):
+            # CHECK FORWARD DIAGONALS
+            if check_direction == 0:  
+                steps = diag_index_to_steps[diag_index][::-1]
+                pin_index = 0 if diag_index == 2 else \
+                            2 if diag_index == 7 else None
+                diag_team = diag_forward_team[diag_index]
+                diag_type = diag_forward_type[diag_index]
+                diag_diff = diag_forward_diff[diag_index]
+            # CHECK BACKWARD DIAGONALS
+            else:  
+                steps = diag_index_to_steps[diag_index]
+                pin_index = 1 if diag_index == 2 else \
+                            3 if diag_index == 7 else None
+                diag_team = diag_backward_team[diag_index]
+                diag_type = diag_backward_type[diag_index]
+                diag_diff = diag_backward_diff[diag_index]
         
-        # if pin diagonal, and pinned is team, and pinner is opponent QUEEN/BISHOP
-        if pin_index is not None \
-                and diag_forward_team[diag_index] == team \
-                and diag_pinners[pin_index] in [QUEEN, BISHOP] \
-                and diag_pinners_team[pin_index] == int(not team):
-            pin_dir = diag_pin_index_to_dir[pin_index]
-            pin_diff = diag_forward_diff[diag_index]
-            pin_coords.append(king_coord + pin_diff)
-            pin_dirs.append(pin_dir)
-            if (np.abs(pin_diff) <= 1).all():  # if pinned piece is next to king, then set controlled to true (workaround)
-                controlled[*(pin_diff + 1)] = 1
-        
-        # if first piece on diagonal is opponent QUEEN/BISHOP, then update control along diagonal
-        elif diag_forward_team[diag_index] == int(not team) \
-                and diag_forward_type[diag_index] in [QUEEN, BISHOP]:
-            for step in diag_index_to_steps[diag_index][::-1]:
-                controlled[*step] = 1
-                if neighbours[*step] != 0:  # break if piece blocks
-                    break
+            # if first piece on diagonal is not team
+            if diag_team == int(not team):
+                # if piece is of type that controls the diagonal
+                if diag_type in [QUEEN, BISHOP]:
+                    # if neighbour blocks
+                    if neighbours[*steps[0]] != 0:
+                        controlled[*steps[0]] = 1
+                        # if pin_index and of team, then it is pinned
+                        if pin_index is not None and neighbours[*steps[0]] == -1:
+                            pin_coords.append(king_coord + (steps[0] - [1, 1]))
+                            pin_dirs.append(diag_pin_index_to_dir[pin_index])
+                    else:  # if no piece blocks, then diagonal piece controls entire diagonal
+                        for step in steps:
+                            controlled[*step] = 1
+            
+            # if first piece on diagonal is team and is being pinned, then add pin
+            elif pin_index is not None \
+                    and diag_pinners_team[pin_index] == int(not team) \
+                    and diag_pinners[pin_index] in [QUEEN, BISHOP] \
+                    and neighbours[*steps[0]] == 0:
+                pin_coords.append(king_coord + diag_diff)
+                pin_dirs.append(diag_pin_index_to_dir[pin_index])
 
-        # BACKWARD DIAGONALS
-        pin_index = 1 if diag_index == 2 else \
-                    3 if diag_index == 7 else None
-        
-        # first check pin
-        if pin_index is not None \
-                and diag_backward_team[diag_index] == team \
-                and diag_pinners[pin_index] in [QUEEN, BISHOP] \
-                and diag_pinners_team[pin_index] == int(not team):
-            pin_dir = diag_pin_index_to_dir[pin_index]
-            pin_diff = diag_backward_diff[diag_index]
-            pin_coords.append(king_coord + pin_diff)
-            pin_dirs.append(pin_dir)
-            if (np.abs(pin_diff) <= 1).all():  # if pinned piece is next to king, then set controlled to true (workaround)
-                controlled[*(pin_diff + 1)] = 1
 
-        
-        # if first piece on diagonal is opponent QUEEN/BISHOP, then update control along diagonal
-        elif diag_backward_team[diag_index] == int(not team) \
-                and diag_backward_type[diag_index] in [QUEEN, BISHOP]:
-            # take steps backwards when checking backward diagonal
-            for step in diag_index_to_steps[diag_index]:
-                controlled[*step] = 1
-                if neighbours[*step] != 0:
-                    break
-
-    print(lat_pinners)
 
     # CHECK LATERALS
     for lat_index in range(6):
-        # FORWARD LATERALS
-        pin_index = 0 if lat_index == 1 else \
-                    2 if lat_index == 4 else None
-        
-        # first check pin
-        if pin_index is not None \
-                and lat_forward_team[lat_index] == team \
-                and lat_pinners[pin_index] in [QUEEN, ROOK] \
-                and lat_pinners_team[pin_index] == int(not team):
-            pin_dir = lat_pin_index_to_dir[pin_index]
-            pin_diff = lat_forward_diff[lat_index]
-            pin_coords.append(king_coord + pin_diff)
-            pin_dirs.append(pin_dir)
-            if (np.abs(pin_diff) <= 1).all():  # if pinned piece is next to king, then set controlled to true (workaround)
-                controlled[*(pin_diff + 1)] = 1
-        
-        elif lat_forward_team[lat_index] == int(not team) \
-                and lat_forward_type[lat_index] in [QUEEN, ROOK]:
-            for step in lat_index_to_steps[lat_index][::-1]:
-                controlled[*step] = 1
-                print(step)
+        for check_direction in range(2):
+            # CHECK FORWARD LATERALS
+            if check_direction == 0:
+                steps = lat_index_to_steps[lat_index][::-1]
+                pin_index = 0 if lat_index == 1 else \
+                            2 if lat_index == 4 else None
+                lat_team = lat_forward_team[lat_index]
+                lat_type = lat_forward_type[lat_index]
+                lat_diff = lat_forward_diff[lat_index]
+            # CHECK BACKWARD LATERALS
+            else:
+                steps = lat_index_to_steps[lat_index]
+                pin_index = 1 if lat_index == 1 else \
+                            3 if lat_index == 4 else None
+                lat_team = lat_backward_team[lat_index]
+                lat_type = lat_backward_type[lat_index]
+                lat_diff = lat_backward_diff[lat_index]
+            
+            # if first piece on lateral is not team
+            if lat_team == int(not team):
+                # if piece is of type that controls the lateral
+                if lat_type in [QUEEN, ROOK]:
+                    # if neighbour blocks
+                    if neighbours[*steps[0]] != 0:
+                        controlled[*steps[0]] = 1
+                        # if pin_index and of team, then it is pinned
+                        if pin_index is not None and neighbours[*steps[0]] == -1:
+                            pin_coords.append(king_coord + (steps[0] - [1, 1]))
+                            pin_dirs.append(lat_pin_index_to_dir[pin_index])
+                    else:  # if no piece blocks, then lateral piece controls entire lateral
+                        for step in steps:
+                            controlled[*step] = 1
 
-                if neighbours[*step] != 0:
-                    break
-
-        # BACKWARD LATERALS
-        pin_index = 1 if lat_index == 1 else \
-                    3 if lat_index == 4 else None
+            # if first piece on diagonal is team and is being pinned, then add pin
+            elif pin_index is not None \
+                    and lat_pinners_team[pin_index] == int(not team) \
+                    and lat_pinners[pin_index] in [QUEEN, ROOK] \
+                    and neighbours[*steps[0]] == 0:
+                pin_coords.append(king_coord + lat_diff)
+                pin_dirs.append(lat_pin_index_to_dir[pin_index])
         
-        # first check pin
-        if pin_index is not None \
-                and lat_backward_team[lat_index] == team \
-                and lat_pinners[pin_index] in [QUEEN, ROOK] \
-                and lat_pinners_team[pin_index] == int(not team):
-            pin_dir = lat_pin_index_to_dir[pin_index]
-            pin_diff = lat_backward_diff[lat_index]
-            pin_coords.append(king_coord + pin_diff)
-            pin_dirs.append(pin_dir)
-            if (np.abs(pin_diff) <= 1).all():  # if pinned piece is next to king, then set controlled to true (workaround)
-                controlled[*(pin_diff + 1)] = 1
-        
-        if lat_backward_team[lat_index] == int(not team) \
-                and lat_backward_type[lat_index] in [QUEEN, ROOK]:
-            # take steps backwards when checking backward diagonal
-            for step in lat_index_to_steps[lat_index]:
-                controlled[*step] = 1
-                if neighbours[*step] != 0:
-                    break
 
     # remaining: knight control, opponent king control
 
