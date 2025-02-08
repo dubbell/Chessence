@@ -60,7 +60,19 @@ for piece_contact, piece_corner, piece_side in zip(
 
 contact = [None, queen_contact, rook_contact, bishop_contact, knight_contact]
 
+# map from opponent king diff to control matrix
+diff_to_king_control = {}
+edge_diffs_ = [[rank_diff, file_diff] for rank_diff in [-2, 2] for file_diff in range(-2, 3)] + \
+             [[rank_diff, file_diff] for rank_diff in range(-1, 2) for file_diff in [-2, 2]]
 
+for edge_rank_, edge_file_ in edge_diffs_:
+    controlled = np.zeros((3, 3))
+    for control_rank_diff_ in range(-1, 2):
+        for control_file_diff_ in range(-1, 2):
+            if abs(edge_rank_ - control_rank_diff_) <= 1 and abs(edge_file_ - control_file_diff_) <= 1:
+                controlled[control_rank_diff_ + 1, control_file_diff_ + 1] = 1
+    
+    diff_to_king_control[(edge_rank_, edge_file_)] = controlled
 
 
 def king_state(board : Board, team : int):
@@ -133,7 +145,12 @@ def king_state(board : Board, team : int):
         if (diff_abs <= 1).all():
             neighbours[*(diff + 1)] = -1 if piece_team == team else piece_type
             continue  # handle neighbor pieces differently
-            
+        
+        # if it's the opponent king
+        if piece_type == KING:
+            opponent_king_control = diff_to_king_control.get(tuple(diff))
+            if opponent_king_control is not None:
+                controlled = np.logical_or(controlled, opponent_king_control)
 
         # IF ON A LATERAL LINE -------------
 
