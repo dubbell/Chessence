@@ -371,8 +371,57 @@ class KingStateTest(unittest.TestCase):
         assert_array_equal(controlled, true_controlled)
         
 
+    def test_opponent_knight_control(self):
+        board = Board()
+        board.add_piece(KING, WHITE, 4, 4)
+        board.add_piece(KNIGHT, BLACK, 2, 2)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [0, 1, 0],
+            [1, 0, 0],
+            [0, 0, 0]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+        board.add_piece(KNIGHT, BLACK, 2, 5)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [1, 1, 0],
+            [1, 1, 0],
+            [0, 0, 0]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+        board.add_piece(KNIGHT, BLACK, 7, 6)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [1, 1, 0],
+            [1, 1, 0],
+            [0, 0, 1]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+        board.add_piece(KNIGHT, BLACK, 7, 3)
+
+        controlled, _, _ = king_state(board, WHITE)
+
+        true_controlled = np.array([
+            [1, 1, 0],
+            [1, 1, 0],
+            [0, 1, 1]])
+        
+        assert_array_equal(controlled, true_controlled)
+
+
+
 
 if __name__ == "__main__":
     runner = unittest.TextTestRunner()
     runner.run(unittest.TestLoader().loadTestsFromTestCase(KingStateTest))
-    # runner.run(KingStateTest('test_lateral_pins'))
+    # runner.run(KingStateTest('test_pawn_control'))

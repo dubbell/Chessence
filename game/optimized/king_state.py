@@ -16,11 +16,6 @@ bishop_corner_ = np.array([
     [0, 1, 0],
     [0, 0, 1]])
 
-knight_corner_ = np.array([
-    [0, 0, 0],
-    [0, 0, 1],
-    [0, 1, 0]])
-
 
 queen_side_ = np.array([
     [1, 0, 1],
@@ -37,28 +32,22 @@ bishop_side_ = np.array([
     [1, 0, 1],
     [0, 0, 0]])
 
-knight_side_ = np.array([
-    [0, 0, 0],
-    [0, 0, 0],
-    [1, 0, 1]])
-
 
 queen_contact = np.zeros((3, 3, 3, 3))
 rook_contact = np.zeros((3, 3, 3, 3))
 bishop_contact = np.zeros((3, 3, 3, 3))
-knight_contact = np.zeros((3, 3, 3, 3))
 
 for piece_contact, piece_corner, piece_side in zip(
-        [queen_contact, rook_contact, bishop_contact, knight_contact],
-        [queen_corner_, rook_corner_, bishop_corner_, knight_corner_],
-        [queen_side_, rook_side_, bishop_side_, knight_side_]):
+        [queen_contact, rook_contact, bishop_contact],
+        [queen_corner_, rook_corner_, bishop_corner_],
+        [queen_side_, rook_side_, bishop_side_]):
     
     for i, corner in enumerate([[0, 0], [2, 0], [2, 2], [0, 2]]):
         piece_contact[*corner] = np.rot90(piece_corner, i)
     for i, side in enumerate([[0, 1], [1, 0], [2, 1], [1, 2]]):
         piece_contact[*side] = np.rot90(piece_side, i)
 
-contact = [None, queen_contact, rook_contact, bishop_contact, knight_contact]
+contact = [None, queen_contact, rook_contact, bishop_contact]
 
 # map from opponent king diff to control matrix
 diff_to_king_control = {}
@@ -73,6 +62,11 @@ for edge_rank_, edge_file_ in edge_diffs_:
                 controlled[control_rank_diff_ + 1, control_file_diff_ + 1] = 1
     
     diff_to_king_control[(edge_rank_, edge_file_)] = controlled
+
+knight_diffs = [[rank_diff, file_diff] 
+                for rank_diff in [-2, -1, 1, 2]
+                for file_diff in [-2, -1, 1, 2]
+                if abs(rank_diff) != abs(file_diff)]
 
 
 def king_state(board : Board, team : int):
@@ -141,6 +135,22 @@ def king_state(board : Board, team : int):
         # ignore if it's the king itself
         if distance == 0:
             continue
+
+        # if it's an opponent pawn
+        if piece_type == PAWN and piece_team == int(not team):
+            pawn_coord = diff + 1  # convert diff to control matrix coordinates
+            pawn_control_coords = pawn_coord + [[1 if team == WHITE else -1, file_diff] for file_diff in [-1, 1]]
+            for pawn_control_coord in pawn_control_coords:
+                if (pawn_control_coord <= 2).all() and (pawn_control_coord >= 0).all():
+                    controlled[*pawn_control_coord] = 1
+
+        # if it's an opponent knight
+        if piece_type == KNIGHT and piece_team == int(not team):
+            # coordinates in the `controlled` space controlled by the knight
+            for knight_control_coord in diff + 1 + knight_diffs:
+                if (knight_control_coord >= 0).all() and (knight_control_coord <= 2).all():
+                    controlled[*knight_control_coord] = 1
+
         # if in 3x3 square around the king
         if (diff_abs <= 1).all():
             neighbours[*(diff + 1)] = -1 if piece_team == team else piece_type
@@ -237,22 +247,15 @@ def king_state(board : Board, team : int):
                 diag_pinners[pin_index] = piece_type
                 diag_pinners_team[pin_index] = piece_team
                 diag_pinners_dist[pin_index] = distance
-    
-    # check control by opponent pawns
-    for pawn_diff in oppo_diffs[board.type_locs[int(not team), -1]:]:
-        pawn_coord = pawn_diff + 1  # convert diff to control matrix coordinates
-        pawn_control_coords = pawn_coord + [[1 if team == WHITE else -1, file_diff] for file_diff in [-1, 1]]
-        for pawn_control_coord in pawn_control_coords:
-            if (pawn_control_coord <= 2).all() and (pawn_control_coord >= 0).all():
-                controlled[*pawn_control_coord] = 1
+
 
     # loop through neighbours to determine control
     for rank in range(3):
         for file in range(3):
             neighbour = neighbours[rank, file]
 
-            # empty or team piece or pawn
-            if neighbour <= 0 or neighbour == PAWN:
+            # empty or team piece or pawn or knight
+            if neighbour <= 0 or neighbour == PAWN or neighbour == KNIGHT:
                 continue
 
             is_corner = not (rank == 1 or file == 1)
@@ -386,25 +389,5 @@ def king_state(board : Board, team : int):
                 pin_dirs.append(lat_pin_index_to_dir[pin_index])
         
 
-    # remaining: knight control, opponent king control
-
-
     return controlled, pin_coords, pin_dirs
-
-
-
-# board = Board()
-# board.add_piece(KING, WHITE, 4, 4)
-# board.add_piece(PAWN, WHITE, 3, 3)
-# board.add_piece(BISHOP, BLACK, 1, 1)
-# board.add_piece(BISHOP, BLACK, 2, 1)
-# controlled, pin_coords, pin_dirs = king_state(board, WHITE)
-
-# print(board)
-# print()
-# print(controlled)
-# print()
-
-# for coord, dir in zip(pin_coords, pin_dirs):
-#     print(coord, dir)
 
