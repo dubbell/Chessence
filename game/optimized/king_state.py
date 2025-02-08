@@ -223,8 +223,8 @@ def king_state(board : Board, team : int):
     
     # check control by opponent pawns
     for pawn_diff in oppo_diffs[board.type_locs[int(not team), -1]:]:
-        pawn_coord = pawn_rank, pawn_file = pawn_diff + 1  # convert diff to control matrix coordinates
-        pawn_control_coords = pawn_coord + [[pawn_rank + (1 if team == WHITE else -1), pawn_file + file_diff] for file_diff in [-1, 1]]
+        pawn_coord = pawn_diff + 1  # convert diff to control matrix coordinates
+        pawn_control_coords = pawn_coord + [[1 if team == WHITE else -1, file_diff] for file_diff in [-1, 1]]
         for pawn_control_coord in pawn_control_coords:
             if (pawn_control_coord <= 2).all() and (pawn_control_coord >= 0).all():
                 controlled[*pawn_control_coord] = 1
@@ -370,6 +370,7 @@ def king_state(board : Board, team : int):
         
 
     # remaining: knight control, opponent king control
+
 
     return controlled, pin_coords, pin_dirs
 

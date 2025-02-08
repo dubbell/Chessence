@@ -1,4 +1,5 @@
 import unittest
+import numpy as np
 from numpy.testing import assert_array_equal
 from model import Board
 from constants import *
@@ -122,6 +123,31 @@ class KingStateTest(unittest.TestCase):
         assert_array_equal(pin_coords, [])
         assert_array_equal(pin_dirs, [])
         
+    
+    def test_pawn_control(self):
+        for team in [WHITE, BLACK]:
+            king_coord = [4, 4]
+            for pawn_rank in np.arange(2, 4):
+                for pawn_file in range(2, 7):
+                    board = Board()
+                    board.add_piece(KING, team, *king_coord)
+                    board.add_piece(PAWN, int(not team), pawn_rank if team == WHITE else 8 - pawn_rank, pawn_file)
+
+                    controlled, _, _ = king_state(board, team)
+
+                    true_controlled = np.zeros((3, 3))
+                    if pawn_file - 4 >= 0:
+                        true_controlled[pawn_rank - 2, pawn_file - 4] = 1
+                    if pawn_file - 2 <= 2:
+                        true_controlled[pawn_rank - 2, pawn_file - 2] = 1
+                    
+                    if team == BLACK:
+                        true_controlled = np.flip(true_controlled, axis=0)
+                    
+                    assert_array_equal(controlled, true_controlled)
+                    
+
+
 
 runner = unittest.TextTestRunner()
 runner.run(unittest.TestLoader().loadTestsFromTestCase(KingStateTest))
