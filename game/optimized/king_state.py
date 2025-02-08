@@ -69,7 +69,7 @@ knight_diffs = [[rank_diff, file_diff]
                 if abs(rank_diff) != abs(file_diff)]
 
 
-def king_state(board : Board, team : int):
+def get_king_state(board : Board, team : int):
     """Returns the current state of the team's king on the board. 
        State is defined as (controlled, pin_coords, pin_dirs) where `controlled` are 
        the locations in the 3x3 king square that are controlled by the 

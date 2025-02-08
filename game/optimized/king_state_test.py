@@ -4,7 +4,7 @@ from numpy.testing import assert_array_equal
 from model import Board
 from constants import *
 
-from king_state import king_state
+from king_state import get_king_state
 
 
 
@@ -19,7 +19,7 @@ class KingStateTest(unittest.TestCase):
                 board.add_piece(BISHOP, BLACK, *(king_coord + dir * 3))
                 board.add_piece(PAWN, WHITE, *(king_coord + dir * pin_dist))
 
-                controlled, pin_coords, pin_dirs = king_state(board, WHITE)
+                controlled, pin_coords, pin_dirs = get_king_state(board, WHITE)
 
                 true_controlled = np.rot90(np.array([
                     [2 - pin_dist, 0, 0],
@@ -41,7 +41,7 @@ class KingStateTest(unittest.TestCase):
                 board.add_piece(ROOK, BLACK, *(king_coord + dir * 3))
                 board.add_piece(PAWN, WHITE, *(king_coord + dir * pin_dist))
 
-                controlled, pin_coords, pin_dirs = king_state(board, WHITE)
+                controlled, pin_coords, pin_dirs = get_king_state(board, WHITE)
 
                 true_controlled = np.rot90(np.array([
                     [0, 2 - pin_dist, 0],
@@ -60,7 +60,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(BISHOP, BLACK, 1, 1)
         board.add_piece(BISHOP, BLACK, 2, 1)
 
-        controlled, pin_coords, pin_dirs = king_state(board, WHITE)
+        controlled, pin_coords, pin_dirs = get_king_state(board, WHITE)
 
         assert_array_equal(controlled, [
             [1, 0, 0],
@@ -78,7 +78,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(BISHOP, BLACK, 1, 1)
         board.add_piece(BISHOP, BLACK, 2, 1)
 
-        controlled, pin_coords, pin_dirs = king_state(board, WHITE)
+        controlled, pin_coords, pin_dirs = get_king_state(board, WHITE)
 
         assert_array_equal(controlled, [
             [1, 0, 0],
@@ -95,7 +95,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(BISHOP, WHITE, 1, 1)
         board.add_piece(ROOK, WHITE, 1, 5)
 
-        controlled, pin_coords, pin_dirs = king_state(board, BLACK)
+        controlled, pin_coords, pin_dirs = get_king_state(board, BLACK)
 
         assert_array_equal(controlled, [
             [1, 0, 1],
@@ -113,7 +113,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(BISHOP, WHITE, 1, 1)
         board.add_piece(ROOK, WHITE, 1, 5)
 
-        controlled, pin_coords, pin_dirs = king_state(board, BLACK)
+        controlled, pin_coords, pin_dirs = get_king_state(board, BLACK)
 
         assert_array_equal(controlled, [
             [1, 0, 1],
@@ -133,7 +133,7 @@ class KingStateTest(unittest.TestCase):
                     board.add_piece(KING, team, *king_coord)
                     board.add_piece(PAWN, int(not team), pawn_rank if team == WHITE else 8 - pawn_rank, pawn_file)
 
-                    controlled, _, _ = king_state(board, team)
+                    controlled, _, _ = get_king_state(board, team)
 
                     true_controlled = np.zeros((3, 3))
                     if pawn_file - 4 >= 0:
@@ -152,7 +152,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(KING, WHITE, 4, 4)
         board.add_piece(KNIGHT, BLACK, 3, 3)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 0, 0],
@@ -163,7 +163,7 @@ class KingStateTest(unittest.TestCase):
 
         board.add_piece(KNIGHT, BLACK, 5, 5)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 1, 0],
@@ -174,7 +174,7 @@ class KingStateTest(unittest.TestCase):
 
         board.add_piece(KNIGHT, BLACK, 5, 4)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [1, 1, 1],
@@ -185,7 +185,7 @@ class KingStateTest(unittest.TestCase):
 
         board.add_piece(KNIGHT, BLACK, 4, 3)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [1, 1, 1],
@@ -200,7 +200,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(KING, WHITE, 4, 4)
         board.add_piece(BISHOP, BLACK, 3, 3)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 0, 0],
@@ -211,7 +211,7 @@ class KingStateTest(unittest.TestCase):
 
         board.add_piece(BISHOP, BLACK, 3, 4)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 0, 0],
@@ -222,7 +222,7 @@ class KingStateTest(unittest.TestCase):
 
         board.add_piece(BISHOP, BLACK, 5, 3)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 0, 1],
@@ -237,7 +237,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(KING, WHITE, 4, 4)
         board.add_piece(ROOK, BLACK, 3, 3)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 1, 1],
@@ -248,7 +248,7 @@ class KingStateTest(unittest.TestCase):
         
         board.add_piece(PAWN, WHITE, 3, 4)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 1, 0],
@@ -259,7 +259,7 @@ class KingStateTest(unittest.TestCase):
 
         board.add_piece(ROOK, BLACK, 3, 5)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 1, 0],
@@ -270,7 +270,7 @@ class KingStateTest(unittest.TestCase):
         
         board.add_piece(ROOK, BLACK, 5, 5)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 1, 1],
@@ -285,7 +285,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(KING, WHITE, 4, 4)
         board.add_piece(QUEEN, BLACK, 3, 3)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 1, 1],
@@ -296,7 +296,7 @@ class KingStateTest(unittest.TestCase):
         
         board.add_piece(PAWN, WHITE, 4, 3)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 1, 1],
@@ -307,7 +307,7 @@ class KingStateTest(unittest.TestCase):
         
         board.add_piece(QUEEN, BLACK, 5, 4)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 1, 1],
@@ -322,7 +322,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(KING, WHITE, 4, 4)
         board.add_piece(KING, BLACK, 2, 2)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [1, 0, 0],
@@ -335,7 +335,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(KING, WHITE, 4, 4)
         board.add_piece(KING, BLACK, 2, 5)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 1, 1],
@@ -348,7 +348,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(KING, WHITE, 4, 4)
         board.add_piece(KING, BLACK, 4, 6)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 0, 1],
@@ -361,7 +361,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(KING, WHITE, 4, 4)
         board.add_piece(KING, BLACK, 6, 3)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 0, 0],
@@ -376,7 +376,7 @@ class KingStateTest(unittest.TestCase):
         board.add_piece(KING, WHITE, 4, 4)
         board.add_piece(KNIGHT, BLACK, 2, 2)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [0, 1, 0],
@@ -387,7 +387,7 @@ class KingStateTest(unittest.TestCase):
 
         board.add_piece(KNIGHT, BLACK, 2, 5)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [1, 1, 0],
@@ -398,7 +398,7 @@ class KingStateTest(unittest.TestCase):
 
         board.add_piece(KNIGHT, BLACK, 7, 6)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [1, 1, 0],
@@ -409,7 +409,7 @@ class KingStateTest(unittest.TestCase):
 
         board.add_piece(KNIGHT, BLACK, 7, 3)
 
-        controlled, _, _ = king_state(board, WHITE)
+        controlled, _, _ = get_king_state(board, WHITE)
 
         true_controlled = np.array([
             [1, 1, 0],
