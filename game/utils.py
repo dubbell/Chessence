@@ -31,3 +31,6 @@ def get_starting_board() -> Board:
 
     return board
 
+
+def within_bounds(coord : np.array) -> bool:
+    return (coord <= 7).all() and (coord >= 0).all()

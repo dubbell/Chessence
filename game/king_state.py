@@ -63,11 +63,6 @@ for edge_rank_, edge_file_ in edge_diffs_:
     
     diff_to_king_control[(edge_rank_, edge_file_)] = controlled
 
-knight_diffs = [[rank_diff, file_diff] 
-                for rank_diff in [-2, -1, 1, 2]
-                for file_diff in [-2, -1, 1, 2]
-                if abs(rank_diff) != abs(file_diff)]
-
 
 def get_king_state(board : Board, team : int):
     """Returns the current state of the team's king on the board. 

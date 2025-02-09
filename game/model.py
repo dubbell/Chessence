@@ -30,6 +30,15 @@ class Board:
         return "[" + "]\n[".join([" ".join(rank) for rank in board]) + "]"
 
 
+    def piece_slice(self, piece_type : int):
+        return slice(self.type_locs[piece_type], 
+                     self.type_locs[piece_type + 1] if piece_type != PAWN else None)
+
+
+    def piece_coords(self, team : int, piece_type : int):
+        return self.coords[team][self.piece_slice(piece_type)]
+
+
     def add_piece(self, piece_type : int, team : int, rank : int, file : int):
         location = self.type_locs[team, piece_type]
         self.coords[team] = np.insert(self.coords[team], location, [rank, file], axis=0)
