@@ -1,38 +1,37 @@
-from enum import Enum
+from constants import *
 from typing import List
 import numpy as np
 
 
-class Team(Enum):
-    WHITE = 0
-    BLACK = 1
+class Board:
+    coords : List[np.array] # list of 2 arrays, each (X, 2) of corresponding piece coords
+    types : List[np.array]  # list of 2 arrays, each of length X representing corresponding piece type
+    type_locs = np.array # (2, 6) array, each element representing the starting index of piece in types
 
-class Type(Enum):
-    KING = 0
-    QUEEN = 1
-    ROOK = 2
-    BISHOP = 3
-    KNIGHT = 4
-    PAWN = 5
-
-class Piece:
-    team : Team
-    type : Type
-    pins : List[np.array]
-    coord : np.array
-
-    def __init__(self, team : Team, type : Type, rank : int, file : int):
-        self.team = team
-        self.type = type
-        self.coord = np.array([rank, file])
-        self.pins = []
-        
+    def __init__(self):
+        self.coords = [np.zeros((0, 2), dtype=int), np.zeros((0, 2), dtype=int)]
+        self.types = [[], []]
+        self.type_locs = np.zeros((2, 6), dtype=int)
+    
 
     def __repr__(self):
-        if self.team is None or self.type is None:
-            return "  "
-        return (("W" if self.team == Team.WHITE else "B") 
-              + ("N" if self.type == Type.KNIGHT else self.type.name[0]))
-    
-    def __eq__(self, other):
-        return other.team == self.team and other.type == self.type
+        board = np.array([["  " for _ in range(8)] for _ in range(8)])
+        for team in [WHITE, BLACK]:
+            for coord, type in zip(self.coords[team], self.types[team]):
+                name = ("W" if team == WHITE else "B") + \
+                       ("K" if type == KING else 
+                        "Q" if type == QUEEN else
+                        "R" if type == ROOK else
+                        "B" if type == BISHOP else 
+                        "N" if type == KNIGHT else "P")
+                
+                board[*coord] = name
+
+        return "[" + "]\n[".join([" ".join(rank) for rank in board]) + "]"
+
+
+    def add_piece(self, piece_type : int, team : int, rank : int, file : int):
+        location = self.type_locs[team, piece_type]
+        self.coords[team] = np.insert(self.coords[team], location, [rank, file], axis=0)
+        self.types[team] = np.insert(self.types[team], location, piece_type)
+        self.type_locs[team, (piece_type+1):] += 1

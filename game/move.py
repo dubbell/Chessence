@@ -1,63 +1,39 @@
 import numpy as np
-from search import cast_rays, locate, locate_first, locate_all
-from model import Team, Type
-from constants import ALL_DIRS, DIAG_DIRS, LAT_DIRS
-from utils import opponent
+from typing import List, Tuple
+from constants import *
+from model import Board
+from king_state import get_king_state
 
 
+def get_moves(board : Board, team : int) -> List[Tuple[int, np.array]]:
+    """Returns list of (piece_index, coord), indicating which piece can be moved and where.
+       Returns None if in checkmate, and [] if no moves are available (stalemate)."""
 
-def get_moves(board : np.array, pieces : map, team : Team):
+    moves = []
 
-    opponent_control = np.zeros((8, 8))
+    # controlled squares around king, coords of pieces pinned to king, and the direction from which they are pinned
+    controlled, pin_coords, pin_dirs = get_king_state(board, team)
 
-    king_coord = pieces[team][Type.KING].coord
+    # squares populated by team
+    team_pop = np.zeros((8, 8))
+    for team_coord in board.coords[team]:
+        team_pop[*team_coord] = 1
 
-    # calculate pins
-    pinned = []
-    king_covered, king_hits = cast_rays(board, king_coord, ALL_DIRS)
+    # king moves
+    king_rank, king_file = board.coords[team][0]
+    for controlled_rank in range(3):
+        for controlled_file in range(3):
+            #king's square
+            if controlled_rank == 1 and controlled_file == 1:
+                continue
+            to_rank, to_file = king_rank + controlled_rank - 1, king_file + controlled_file - 1
+            if controlled[controlled_rank, controlled_file] == 0 \
+                    and team_pop[to_rank, to_file] == 0:
+                moves.append((0, np.array([to_rank, to_file])))
 
-    # calculate pins and opponent control by queen, rooks and bishops
-    for pinner_piece in [piece 
-                         for piece_list in [pieces[opponent(team)][type] for type in [Type.QUEEN, Type.ROOK, Type.BISHOP]] 
-                         for piece in piece_list]:
-        # determine in which directions to cast rays
-        if pinner_piece.type == Type.QUEEN:
-            pinner_dirs = ALL_DIRS
-            opposite_dir_indices = [4, 5, 6, 7, 0, 1, 2, 3]
-        else:
-            if pinner_piece.type == Type.BISHOP:
-                pinner_dirs = DIAG_DIRS
-            else:
-                pinner_dirs = LAT_DIRS
-            opposite_dir_indices = [2, 3, 0, 1]
-        
-        # cast rays in directions
-        pinner_covered, pinner_hits = cast_rays(board, pinner_piece.coord, pinner_dirs, True)
-        # positions where rays hit
-        pin_hit_coords = []
-        
-        # determine opponent control and what the rays hit
-        for line_coords, pin_hit in zip(pinner_covered, pinner_hits):
-            for covered_coord in line_coords:
-                opponent_control[*covered_coord] = 1
-            pin_hit_coords.append(pinner_covered[-1] if pin_hit is not None else None)
-
-        # pin checking
-        # if king ray hits the same target as a piece ray and they are from opposite sides, then it is a pin
-        for dir_i, king_hit_coord, king_hit, pin_hit_coord, pin_hit in \
-                zip(np.arange(len(pinner_hits)), king_covered, king_hits, pin_hit_coords[opposite_dir_indices], pinner_hits[opposite_dir_indices]):
-            if king_hit == pin_hit and (king_hit_coord == pin_hit_coord).all():
-                pinned.append(king_hit)
-                king_hit.pins.append(ALL_DIRS[dir_i])
+    # if king is in check
+    if controlled[1, 1] == 1:
+        return moves if len(moves) > 0 else None  # None if checkmate
     
 
-
-
-
-
-    
-    for piece in pinned:
-        piece.pins = []
-
-
-
+    return moves
