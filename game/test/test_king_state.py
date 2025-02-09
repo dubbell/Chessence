@@ -1,10 +1,13 @@
 import unittest
+
 import numpy as np
 from numpy.testing import assert_array_equal
+
 from model import Board
 from constants import *
 
 from king_state import get_king_state
+
 
 
 
@@ -417,11 +420,3 @@ class KingStateTest(unittest.TestCase):
             [0, 1, 1]])
         
         assert_array_equal(controlled, true_controlled)
-
-
-
-
-if __name__ == "__main__":
-    runner = unittest.TextTestRunner()
-    runner.run(unittest.TestLoader().loadTestsFromTestCase(KingStateTest))
-    # runner.run(KingStateTest('test_pawn_control'))
