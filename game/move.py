@@ -6,7 +6,7 @@ from king_state import get_king_state
 from utils import within_bounds
 
 
-def get_moves(board : Board, team : int) -> List[Tuple[int, np.array]]:
+def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[Tuple[int, np.array]]:
     """Returns list of (piece_index, coord), indicating which piece can be moved and where.
        Returns None if in checkmate, and [] if no moves are available (stalemate)."""
 
@@ -51,12 +51,16 @@ def get_moves(board : Board, team : int) -> List[Tuple[int, np.array]]:
     piece_index = board.type_locs[team, PAWN]
     for pawn_coord in board.piece_coords(team, PAWN):
         pin_dir = pin_map[*pawn_coord]
-        moves.extend([(piece_index, pawn_coord + to_diff) 
-                      for to_diff in [[1 if team == BLACK else -1, file_diff] for file_diff in [-1, 1]]
-                      if within_bounds(pawn_coord + to_diff)  # bounds checking
-                      and team_pop[*(pawn_coord + to_diff)] == 0  # not populated by team
+        rank_diff = 1 if team == BLACK else -1
+
+        moves.extend([(piece_index, pawn_coord + [rank_diff, file_diff]) 
+                      for file_diff in [-1, 1]
+                      if within_bounds(pawn_coord + [rank_diff, file_diff])  # bounds checking
                       and ((pin_dir == 0).all()  # no pin
-                           or (pin_dir == to_diff).all() or (-pin_dir == to_diff).all())])  # or pin in same direction as move
+                           or (pin_dir == [rank_diff, file_diff]).all() or (-pin_dir == [rank_diff, file_diff]).all())  # or pin in same direction as move
+                      and (oppo_pop[*(pawn_coord + [rank_diff, file_diff])] == 1  # populated by opponent
+                           or (en_passant == pawn_coord + [0, file_diff]).all()  # or en passant
+                           and (pin_map[*en_passant] == 0).all())])  # en passant'ed pawn can't be pinned
 
         piece_index += 1
 

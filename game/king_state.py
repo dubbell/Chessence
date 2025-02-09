@@ -329,6 +329,16 @@ def get_king_state(board : Board, team : int):
                     else:  # if no piece blocks, then diagonal piece controls entire diagonal
                         for step in steps:
                             controlled[*step] = 1
+                
+                # add diaonal pins on opponent pawns since it matters for en passant
+                elif diag_type == PAWN \
+                        and pin_index is not None \
+                        and diag_pinners_team[pin_index] == int(not team) \
+                        and diag_pinners[pin_index] in [QUEEN, BISHOP] \
+                        and neighbours[*steps[0]] == 0:
+                    pin_coords.append(king_coord + diag_diff)
+                    pin_dirs.append(diag_pin_index_to_dir[pin_index])
+
             
             # if first piece on diagonal is team and is being pinned, then add pin
             elif pin_index is not None \
