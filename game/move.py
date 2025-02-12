@@ -53,6 +53,16 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
         pin_dir = pin_map[*pawn_coord]
         rank_diff = 1 if team == BLACK else -1
 
+        # forward moves
+        if pin_map[*pawn_coord, 1] == 0:  # if not pinned in relevant direction
+            if oppo_pop[*(pawn_coord + [rank_diff, 0])] == 0:
+                moves.append((piece_index, pawn_coord + [rank_diff, 0]))
+            
+                if (pawn_coord[0] == 1 and team == BLACK or pawn_coord[0] == 6 and team == WHITE) \
+                        and oppo_pop[*(pawn_coord + [rank_diff * 2, 0])] == 0:
+                    moves.append((piece_index, pawn_coord + [rank_diff * 2, 0]))
+                
+        # capture moves
         moves.extend([(piece_index, pawn_coord + [rank_diff, file_diff]) 
                       for file_diff in [-1, 1]
                       if within_bounds(pawn_coord + [rank_diff, file_diff])  # bounds checking
@@ -77,8 +87,82 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
         piece_index += 1
     
 
+    # bishop moves
+    piece_index = board.type_locs[team, BISHOP]
+    for bishop_coord in board.piece_coords(team, BISHOP):
+        # determine directions in which bishop can move
+        if (pin_map[*bishop_coord] == 0).all():
+            bishop_dirs = np.array([[-1, -1], [-1, 1], [1, -1], [1, 1]])
+        elif (pin_map[*bishop_coord] == [1, 1]).all() or (pin_map[*bishop_coord] == [-1, -1]).all():
+            bishop_dirs = np.array([[-1, -1], [1, 1]])
+        elif (pin_map[*bishop_coord] == [-1, 1]).all() or (pin_map[*bishop_coord] == [1, -1]).all():
+            bishop_dirs = np.array([[1, -1], [-1, 1]])
+        else:
+            continue  # can't move if pinned from lateral direction
 
-
+        moves.extend([(piece_index, to_coord) 
+                      for to_coord in get_moves_along_directions(bishop_coord, bishop_dirs, team_pop, oppo_pop)])
+    
+        piece_index += 1
     
 
+    # rook moves
+    piece_index = board.type_locs[team, ROOK]
+    for rook_coord in board.piece_coords(team, ROOK):
+        # determine directions in which rook can move
+        if (pin_map[*bishop_coord] == 0).all():
+            rook_dirs = np.array([[-1, 0], [0, 1], [0, -1], [1, 0]])
+        elif (pin_map[*bishop_coord] == [0, 1]).all() or (pin_map[*bishop_coord] == [0, -1]).all():
+            rook_dirs = np.array([[0, -1], [0, 1]])
+        elif (pin_map[*bishop_coord] == [-1, 0]).all() or (pin_map[*bishop_coord] == [1, 0]).all():
+            rook_dirs = np.array([[1, 0], [-1, 0]])
+        else:
+            continue  # can't move if pinned from diagonal direction
+    
+        moves.extend([(piece_index, to_coord)
+                      for to_coord in get_moves_along_directions(rook_coord, rook_dirs, team_pop, oppo_pop)])
+
+        piece_index += 1
+    
+
+    # queen moves
+    piece_index = board.type_locs[team, QUEEN]
+    for queen_coord in board.piece_coords(team, QUEEN):
+        if (pin_map[*bishop_coord] == 0).all():
+            queen_dirs = np.array([[-1, 0], [0, 1], [0, -1], [1, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]])
+        else:
+            queen_dirs = np.array([pin_map[*queen_coord], -pin_map[*queen_coord]])
+        
+        moves.extend([(piece_index, to_coord)
+                      for to_coord in get_moves_along_directions(queen_coord, queen_dirs, team_pop, oppo_pop)])
+
+        piece_index += 1
+
+
+    return moves
+
+
+def get_moves_along_directions(origin : np.array, dirs : np.array, team_pop : np.array, oppo_pop : np.array):
+    """Gets all moves for piece that can move along given directions."""
+
+    moves = []
+
+    for dist in range(7):
+        if len(dirs) == 0:
+            break
+
+        to_coords = origin + dirs * dist
+        remove = []
+
+        for dir_index, to_coord in enumerate(to_coords):
+            if team_pop[*to_coord] or not within_bounds(to_coord):
+                remove.append(dir_index)
+            elif oppo_pop[*to_coord]:
+                moves.append(to_coord)
+                remove.append(dir_index)
+            else:
+                moves.append(to_coord)
+        
+        dirs = np.delete(dirs, remove, axis=0)
+    
     return moves
