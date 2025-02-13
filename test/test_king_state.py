@@ -3,10 +3,10 @@ import unittest
 import numpy as np
 from numpy.testing import assert_array_equal
 
-from model import Board
-from constants import *
+from game.model import Board
+from game.constants import *
 
-from king_state import get_king_state
+from game.king_state import get_king_state
 
 
 

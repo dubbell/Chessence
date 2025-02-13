@@ -32,5 +32,5 @@ def get_starting_board() -> Board:
     return board
 
 
-def within_bounds(coord : np.array) -> bool:
-    return (coord <= 7).all() and (coord >= 0).all()
+def within_bounds(rank : int, file : int) -> bool:
+    return rank <= 7 and rank >= 0 and file <= 7 and file >= 0

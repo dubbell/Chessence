@@ -1,7 +1,7 @@
 import numpy as np
 from typing import List, Tuple
 from constants import *
-from model import Board
+from model import Board, Move
 from king_state import get_king_state
 from utils import within_bounds
 
@@ -38,9 +38,10 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
             if controlled_rank == 1 and controlled_file == 1:
                 continue
             to_rank, to_file = king_rank + controlled_rank - 1, king_file + controlled_file - 1
-            if controlled[controlled_rank, controlled_file] == 0 \
+            if within_bounds(to_rank, to_file) \
+                    and controlled[controlled_rank, controlled_file] == 0 \
                     and team_pop[to_rank, to_file] == 0:
-                moves.append((0, np.array([to_rank, to_file])))
+                moves.append(Move(0, np.array([to_rank, to_file])))
 
     # if king is in check
     if controlled[1, 1] == 1:
@@ -56,16 +57,16 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
         # forward moves
         if pin_map[*pawn_coord, 1] == 0:  # if not pinned in relevant direction
             if oppo_pop[*(pawn_coord + [rank_diff, 0])] == 0:
-                moves.append((piece_index, pawn_coord + [rank_diff, 0]))
+                moves.append(Move(piece_index, pawn_coord + [rank_diff, 0]))
             
                 if (pawn_coord[0] == 1 and team == BLACK or pawn_coord[0] == 6 and team == WHITE) \
                         and oppo_pop[*(pawn_coord + [rank_diff * 2, 0])] == 0:
-                    moves.append((piece_index, pawn_coord + [rank_diff * 2, 0]))
+                    moves.append(Move(piece_index, pawn_coord + [rank_diff * 2, 0]))
                 
         # capture moves
-        moves.extend([(piece_index, pawn_coord + [rank_diff, file_diff]) 
+        moves.extend([Move(piece_index, pawn_coord + [rank_diff, file_diff]) 
                       for file_diff in [-1, 1]
-                      if within_bounds(pawn_coord + [rank_diff, file_diff])  # bounds checking
+                      if within_bounds(*(pawn_coord + [rank_diff, file_diff]))  # bounds checking
                       and ((pin_dir == 0).all()  # no pin
                            or (pin_dir == [rank_diff, file_diff]).all() or (-pin_dir == [rank_diff, file_diff]).all())  # or pin in same direction as move
                       and (oppo_pop[*(pawn_coord + [rank_diff, file_diff])] == 1  # populated by opponent
@@ -80,8 +81,8 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
     for knight_coord in board.piece_coords(team, KNIGHT):
         # if not pinned, then add moves
         if (pin_map[*knight_coord] == 0).all():
-            moves.extend([(piece_index, to_coord) for to_coord in knight_coord + knight_diffs
-                          if within_bounds(to_coord)  # bounds checking
+            moves.extend([Move(piece_index, to_coord) for to_coord in knight_coord + knight_diffs
+                          if within_bounds(*to_coord)  # bounds checking
                           and team_pop[*to_coord] == 0])  # not populated by team
         
         piece_index += 1
@@ -100,7 +101,7 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
         else:
             continue  # can't move if pinned from lateral direction
 
-        moves.extend([(piece_index, to_coord) 
+        moves.extend([Move(piece_index, to_coord) 
                       for to_coord in get_moves_along_directions(bishop_coord, bishop_dirs, team_pop, oppo_pop)])
     
         piece_index += 1
@@ -119,7 +120,7 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
         else:
             continue  # can't move if pinned from diagonal direction
     
-        moves.extend([(piece_index, to_coord)
+        moves.extend([Move(piece_index, to_coord)
                       for to_coord in get_moves_along_directions(rook_coord, rook_dirs, team_pop, oppo_pop)])
 
         piece_index += 1
@@ -133,7 +134,7 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
         else:
             queen_dirs = np.array([pin_map[*queen_coord], -pin_map[*queen_coord]])
         
-        moves.extend([(piece_index, to_coord)
+        moves.extend([Move(piece_index, to_coord)
                       for to_coord in get_moves_along_directions(queen_coord, queen_dirs, team_pop, oppo_pop)])
 
         piece_index += 1
@@ -155,7 +156,7 @@ def get_moves_along_directions(origin : np.array, dirs : np.array, team_pop : np
         remove = []
 
         for dir_index, to_coord in enumerate(to_coords):
-            if team_pop[*to_coord] or not within_bounds(to_coord):
+            if team_pop[*to_coord] or not within_bounds(*to_coord):
                 remove.append(dir_index)
             elif oppo_pop[*to_coord]:
                 moves.append(to_coord)
