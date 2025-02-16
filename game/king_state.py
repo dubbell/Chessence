@@ -78,7 +78,9 @@ def get_king_state(board : Board, team : int):
     # -1 if team piece, 0 if empty, otherwise opponent piece_type (0 piece_type impossible because king)
     neighbours = np.zeros((3, 3), dtype=int)
     
-    king_coord = board.coords[team][KING]
+    king_coord = board.king_coord(team)
+    if king_coord is None:
+        return controlled, pin_coords, pin_dirs
 
     team_diffs = board.coords[team] - king_coord
     oppo_diffs = board.coords[int(not team)] - king_coord
