@@ -134,7 +134,7 @@ class KingStateTest(unittest.TestCase):
                 for pawn_file in range(2, 7):
                     board = Board()
                     board.add_piece(KING, team, *king_coord)
-                    board.add_piece(PAWN, int(not team), pawn_rank if team == WHITE else 8 - pawn_rank, pawn_file)
+                    board.add_piece(PAWN, other_team(team), pawn_rank if team == WHITE else 8 - pawn_rank, pawn_file)
 
                     controlled, _, _ = get_king_state(board, team)
 

@@ -64,7 +64,7 @@ for edge_rank_, edge_file_ in edge_diffs_:
     diff_to_king_control[(edge_rank_, edge_file_)] = controlled
 
 
-def get_king_state(board : Board, team : int):
+def get_king_state(board : Board, team : Team):
     """Returns the current state of the team's king on the board. 
        State is defined as (controlled, pin_coords, pin_dirs) where `controlled` are 
        the locations in the 3x3 king square that are controlled by the 
@@ -78,12 +78,11 @@ def get_king_state(board : Board, team : int):
     # -1 if team piece, 0 if empty, otherwise opponent piece_type (0 piece_type impossible because king)
     neighbours = np.zeros((3, 3), dtype=int)
     
-    king_coord = board.king_coord(team)
-    if king_coord is None:
+    king_pieces = board.of_team_and_type(team, KING)
+    if len(king_pieces) == 0:
         return controlled, pin_coords, pin_dirs
 
-    team_diffs = board.coords[team] - king_coord
-    oppo_diffs = board.coords[int(not team)] - king_coord
+    king_coord = king_pieces[0].coord
 
     # first pieces found in each diagonal line, only considering one direction
     diag_forward_diff = [None for _ in range(10)]
@@ -119,9 +118,10 @@ def get_king_state(board : Board, team : int):
     lat_pinners_dist = [10 for _ in range(4)]
 
     # loop through every piece to populate above lists
-    for piece_type, piece_team, diff in zip(np.concatenate((board.types[team], board.types[int(not team)])), 
-                                            [team for _ in range(len(team_diffs))] + [int(not team) for _ in range(len(oppo_diffs))], 
-                                            np.vstack((team_diffs, oppo_diffs))):
+    for piece in board.pieces:
+        diff = piece.coord - king_coord
+        piece_type = piece.piece_type
+
         diff_abs = np.abs(diff)
         diff_sum = diff.sum()
         diff_dif = diff[0] - diff[1]
@@ -134,7 +134,7 @@ def get_king_state(board : Board, team : int):
             continue
 
         # if it's an opponent pawn
-        if piece_type == PAWN and piece_team == int(not team):
+        if piece_type == PAWN and piece.team == other_team(team):
             pawn_coord = diff + 1  # convert diff to control matrix coordinates
             pawn_control_coords = pawn_coord + [[1 if team == WHITE else -1, file_diff] for file_diff in [-1, 1]]
             for pawn_control_coord in pawn_control_coords:
@@ -142,7 +142,7 @@ def get_king_state(board : Board, team : int):
                     controlled[*pawn_control_coord] = 1
 
         # if it's an opponent knight
-        if piece_type == KNIGHT and piece_team == int(not team):
+        if piece_type == KNIGHT and piece.team == other_team(team):
             # coordinates in the `controlled` space controlled by the knight
             for knight_control_coord in diff + 1 + knight_diffs:
                 if (knight_control_coord >= 0).all() and (knight_control_coord <= 2).all():
@@ -150,7 +150,7 @@ def get_king_state(board : Board, team : int):
 
         # if in 3x3 square around the king
         if (diff_abs <= 1).all():
-            neighbours[*(diff + 1)] = -1 if piece_team == team else piece_type
+            neighbours[*(diff + 1)] = -1 if piece.team == team else piece_type.value
             continue  # handle neighbor pieces differently
         
         # if it's the opponent king
@@ -187,18 +187,18 @@ def get_king_state(board : Board, team : int):
                 # if on king's lateral, also update second closest piece and distance, since it might be pinning the current piece to the king
                 if pin_index is not None:
                     lat_pinners[pin_index] = lat_types[lat_index]
-                    lat_pinners_team[pin_index] = piece_team
+                    lat_pinners_team[pin_index] = lat_team[lat_index]
                     lat_pinners_dist[pin_index] = lat_dists[lat_index]
                 # update closest piece and distance
                 lat_coords[lat_index] = diff
                 lat_types[lat_index] = piece_type
-                lat_team[lat_index] = piece_team
+                lat_team[lat_index] = piece.team
                 lat_dists[lat_index] = distance
             
             # if it's only the second closest piece, but it's on the king's lateral, then update second closest i.e. pinner
             elif pin_index is not None and distance < lat_pinners_dist[pin_index]:
                 lat_pinners[pin_index] = piece_type
-                lat_pinners_team[pin_index] = piece_team
+                lat_pinners_team[pin_index] = piece.team
                 lat_pinners_dist[pin_index] = distance
 
 
@@ -231,18 +231,18 @@ def get_king_state(board : Board, team : int):
                 # if on king's diagonal, also update second closest piece and distance, since it might be pinning the piece to the king
                 if pin_index is not None:
                     diag_pinners[pin_index] = diag_pieces[diag_index]
-                    diag_pinners_team[pin_index] = piece_team
+                    diag_pinners_team[pin_index] = diag_team[diag_index]
                     diag_pinners_dist[pin_index] = diag_dists[diag_index]
                 # update closest piece and distance
                 diag_coords[diag_index] = diff
                 diag_pieces[diag_index] = piece_type
-                diag_team[diag_index] = piece_team
+                diag_team[diag_index] = piece.team
                 diag_dists[diag_index] = distance
 
             # if it's only the second closest piece, and it's on the king's diagonal, then only update second closest i.e. pinner
             elif pin_index is not None and distance < diag_pinners_dist[pin_index]:
                 diag_pinners[pin_index] = piece_type
-                diag_pinners_team[pin_index] = piece_team
+                diag_pinners_team[pin_index] = piece.team
                 diag_pinners_dist[pin_index] = distance
 
 
@@ -252,12 +252,12 @@ def get_king_state(board : Board, team : int):
             neighbour = neighbours[rank, file]
 
             # empty or team piece or pawn or knight
-            if neighbour <= 0 or neighbour == PAWN or neighbour == KNIGHT:
+            if neighbour <= 0 or neighbour == PAWN.value or neighbour == KNIGHT.value:
                 continue
 
             is_corner = not (rank == 1 or file == 1)
 
-            if is_corner and neighbour in [QUEEN, ROOK]:
+            if is_corner and neighbour in [QUEEN.value, ROOK.value]:
                 # filter for neighbours that potentially blocks queen/rook sight along edges of 3x3 square
                 contact_block = np.ones((3, 3))
                 if neighbours[1, file] != 0:
@@ -318,7 +318,7 @@ def get_king_state(board : Board, team : int):
                 diag_diff = diag_backward_diff[diag_index]
         
             # if first piece on diagonal is not team
-            if diag_team == int(not team):
+            if diag_team == other_team(team):
                 # if piece is of type that controls the diagonal
                 if diag_type in [QUEEN, BISHOP]:
                     # if neighbour blocks
@@ -335,16 +335,16 @@ def get_king_state(board : Board, team : int):
                 # add diaonal pins on opponent pawns since it matters for en passant
                 elif diag_type == PAWN \
                         and pin_index is not None \
-                        and diag_pinners_team[pin_index] == int(not team) \
+                        and diag_pinners_team[pin_index] == other_team(team) \
                         and diag_pinners[pin_index] in [QUEEN, BISHOP] \
                         and neighbours[*steps[0]] == 0:
                     pin_coords.append(king_coord + diag_diff)
                     pin_dirs.append(diag_pin_index_to_dir[pin_index])
 
-            
+
             # if first piece on diagonal is team and is being pinned, then add pin
             elif pin_index is not None \
-                    and diag_pinners_team[pin_index] == int(not team) \
+                    and diag_pinners_team[pin_index] == other_team(team) \
                     and diag_pinners[pin_index] in [QUEEN, BISHOP] \
                     and neighbours[*steps[0]] == 0:
                 pin_coords.append(king_coord + diag_diff)
@@ -373,7 +373,7 @@ def get_king_state(board : Board, team : int):
                 lat_diff = lat_backward_diff[lat_index]
             
             # if first piece on lateral is not team
-            if lat_team == int(not team):
+            if lat_team == other_team(team):
                 # if piece is of type that controls the lateral
                 if lat_type in [QUEEN, ROOK]:
                     # if neighbour blocks
@@ -389,7 +389,7 @@ def get_king_state(board : Board, team : int):
 
             # if first piece on diagonal is team and is being pinned, then add pin
             elif pin_index is not None \
-                    and lat_pinners_team[pin_index] == int(not team) \
+                    and lat_pinners_team[pin_index] == other_team(team) \
                     and lat_pinners[pin_index] in [QUEEN, ROOK] \
                     and neighbours[*steps[0]] == 0:
                 pin_coords.append(king_coord + lat_diff)
