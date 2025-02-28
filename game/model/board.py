@@ -25,18 +25,25 @@ class Board:
 
     def __repr__(self):
         board = np.array([["  " for _ in range(8)] for _ in range(8)])
-        for team in [WHITE, BLACK]:
-            for piece in self.pieces:
-                name = ("W" if team == WHITE else "B") + \
-                       ("K" if piece.piece_type == KING else 
-                        "Q" if piece.piece_type == QUEEN else
-                        "R" if piece.piece_type == ROOK else
-                        "B" if piece.piece_type == BISHOP else 
-                        "N" if piece.piece_type == KNIGHT else "P")
-                
-                board[*piece.coord] = name
+        for piece in self.pieces:
+            name = ("W" if piece.team == WHITE else "B") + \
+                    ("K" if piece.piece_type == KING else 
+                    "Q" if piece.piece_type == QUEEN else
+                    "R" if piece.piece_type == ROOK else
+                    "B" if piece.piece_type == BISHOP else 
+                    "N" if piece.piece_type == KNIGHT else "P")
+            
+            board[*piece.coord] = name
 
         return "[" + "]\n[".join([" ".join(rank) for rank in board]) + "]"
+
+
+    def get_king(self, team : Team):
+        king_pieces = self.of_team_and_type(team, KING)
+        if len(king_pieces) > 0:
+            return king_pieces[0]
+        else:
+            return None
 
 
     def of_team(self, team : Team):

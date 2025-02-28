@@ -88,17 +88,17 @@ def get_king_state(board : Board, team : Team):
     diag_forward_diff = [None for _ in range(10)]
     diag_forward_type = [None for _ in range(10)]
     diag_forward_team = [None for _ in range(10)]
-    diag_forward_dist = [10 for _ in range(10)]  # to keep track of distances
+    diag_forward_dist = [15 for _ in range(10)]  # to keep track of distances
     # same for the other direction
     diag_backward_diff = [None for _ in range(10)]
     diag_backward_type = [None for _ in range(10)]
     diag_backward_team = [None for _ in range(10)]
-    diag_backward_dist = [10 for _ in range(10)]  # to keep track of distances
+    diag_backward_dist = [15 for _ in range(10)]  # to keep track of distances
 
     # potential diagonal pinners
     diag_pinners = [None for _ in range(4)]
     diag_pinners_team = [None for _ in range(4)]
-    diag_pinners_dist = [10 for _ in range(4)]  # distance to potential pinners
+    diag_pinners_dist = [15 for _ in range(4)]  # distance to potential pinners
 
 
     # first pieces found in each lateral line, only considering one direction
@@ -332,7 +332,7 @@ def get_king_state(board : Board, team : Team):
                         for step in steps:
                             controlled[*step] = 1
                 
-                # add diaonal pins on opponent pawns since it matters for en passant
+                # add diagonal pins on opponent pawns since it matters for en passant
                 elif diag_type == PAWN \
                         and pin_index is not None \
                         and diag_pinners_team[pin_index] == other_team(team) \
@@ -395,6 +395,9 @@ def get_king_state(board : Board, team : Team):
                 pin_coords.append(king_coord + lat_diff)
                 pin_dirs.append(lat_pin_index_to_dir[pin_index])
         
+
+    
+
 
     return controlled, pin_coords, pin_dirs
 

@@ -6,7 +6,7 @@ from king_state import get_king_state
 from utils import within_bounds
 
 
-def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[Tuple[int, np.array]]:
+def get_moves(board : Board, team : int, en_passant : np.array | Tuple[int, int] = None) -> List[Tuple[int, np.array]]:
     """Returns map from pieces to a lists of moves.
        None if in checkmate, and {} if no moves are available (stalemate)."""
 
@@ -17,7 +17,7 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
     controlled, pin_coords, pin_dirs = get_king_state(board, team)
 
     # lookup map of all pins, [0, 0] if no pin and direction if pin exists
-    pin_map = np.zeros((8, 8, 2))
+    pin_map = np.zeros((8, 8, 2), dtype=int)
     for pin_coord, pin_dir in zip(pin_coords, pin_dirs):
         pin_map[*pin_coord] = pin_dir
 
@@ -33,9 +33,8 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
     
 
     # king moves
-    king_pieces = board.of_team_and_type(team, KING)
-    if len(king_pieces) != 0:
-        king_piece = king_pieces[0]
+    king_piece = board.get_king(team)
+    if king_piece is not None:
         king_moves = []
         king_rank, king_file = king_piece.coord
         for controlled_rank in range(3):
@@ -73,15 +72,62 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
                         and oppo_pop[*(pawn_coord + [rank_diff * 2, 0])] == 0:
                     pawn_moves.append(Move(pawn_coord + [rank_diff * 2, 0]))
 
+
         # capture moves
-        pawn_moves.extend([Move(pawn_coord + [rank_diff, file_diff]) 
-                      for file_diff in [-1, 1]
-                      if within_bounds(*(pawn_coord + [rank_diff, file_diff]))  # bounds checking
-                      and ((pin_dir == 0).all()  # no pin
-                           or (pin_dir == [rank_diff, file_diff]).all() or (-pin_dir == [rank_diff, file_diff]).all())  # or pin in same direction as move
-                      and (oppo_pop[*(pawn_coord + [rank_diff, file_diff])] == 1  # populated by opponent
-                           or (en_passant == pawn_coord + [0, file_diff]).all()  # or en passant
-                           and (pin_map[*en_passant] == 0).all())])  # en passant'ed pawn can't be pinned
+        for file_diff in [-1, 1]:
+            # in bounds of board
+            if not within_bounds(*(pawn_coord + [rank_diff, file_diff])):
+                continue
+            
+            # whether pawn is pinned from relevant direction (in relation to move direction)
+            if not (pin_dir == 0).all() \
+                    and not (pin_dir == [rank_diff, file_diff]).all() \
+                    and not (-pin_dir == [rank_diff, file_diff]).all():
+                continue
+            
+            # if square occupied by opponent, then the move is possible
+            if oppo_pop[*(pawn_coord + [rank_diff, file_diff])] == 1:
+                pawn_moves.append(Move(pawn_coord + [rank_diff, file_diff]))
+
+            # in case of en passant
+            elif en_passant is not None and (en_passant == pawn_coord + [0, file_diff]).all():
+                # if en passant pawn is pinned, then ignore
+                if not (pin_map[*en_passant] == 0).all():
+                    continue
+                
+                # rare case where opposite team pawns next to each other are both laterally pinned to a king
+                elif king_piece is not None and king_piece.coord[0] == (3 if team == WHITE else 4):
+                    check_direction = -1 if king_piece.coord[1] > pawn_coord[1] else 1
+                    check_file = king_piece.coord[1] + check_direction
+
+                    rare_double_pawn_pin = False
+                    
+                    # check squares on side of pawns opposite of king until piece or edge is found
+                    while within_bounds(pawn_coord[0], check_file):
+                        # ignore the two pawns
+                        if check_file == pawn_coord[1] or check_file == pawn_coord[1] + file_diff:
+                            check_file += check_direction
+                            continue
+                        
+                        # check coordinate for piece
+                        check_piece = board.coord_map.get((pawn_coord[0], check_file))
+                        
+                        # if piece found
+                        if check_piece is not None:
+                            # rare double pawn pin check
+                            if check_piece.team == other_team(team) and check_piece.piece_type in [QUEEN, ROOK]:
+                                rare_double_pawn_pin = True
+                            break
+                        
+                        check_file += check_direction
+                    
+                    # no rare double pawn pin, then add en passant move
+                    if not rare_double_pawn_pin:
+                        pawn_moves.append(Move(pawn_coord + [rank_diff, file_diff]))
+                
+                # no pins, add en passant move
+                else:
+                    pawn_moves.append(Move(pawn_coord + [rank_diff, file_diff]))
 
         if len(pawn_moves) > 0:
             moves[pawn_piece] = pawn_moves
@@ -143,7 +189,7 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
         else:
             continue  # can't move if pinned from diagonal direction
     
-        moves.extend([
+        rook_moves.extend([
             Move(to_coord)
             for to_coord in get_moves_along_directions(rook_coord, rook_dirs, team_pop, oppo_pop)])
 
@@ -162,7 +208,7 @@ def get_moves(board : Board, team : int, en_passant : np.array = None) -> List[T
         else:
             queen_dirs = np.array([pin_map[*queen_coord], -pin_map[*queen_coord]])
         
-        moves.extend([
+        queen_moves.extend([
             Move(to_coord)
             for to_coord in get_moves_along_directions(queen_coord, queen_dirs, team_pop, oppo_pop)])
 

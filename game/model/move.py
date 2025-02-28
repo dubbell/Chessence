@@ -17,4 +17,4 @@ class Move:
 
 
     def __repr__(self):
-        return self.to_coord
+        return str(self.to_coord)

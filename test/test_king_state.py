@@ -3,6 +3,8 @@ import unittest
 import numpy as np
 from numpy.testing import assert_array_equal
 
+from test.utils import CustomAssert
+
 from game.model import Board
 from game.constants import *
 
@@ -11,7 +13,7 @@ from game.king_state import get_king_state
 
 
 
-class KingStateTest(unittest.TestCase):
+class TestKingState(unittest.TestCase, CustomAssert):
 
     def test_diagonal_pins(self):
         king_coord = np.array([4, 4])
@@ -420,3 +422,26 @@ class KingStateTest(unittest.TestCase):
             [0, 1, 1]])
         
         assert_array_equal(controlled, true_controlled)
+
+
+    def test_opponent_pawn_pin(self):
+        # should check for pinned opponent pawns, for en passant
+        board = Board()
+
+        board.add_piece(KING, WHITE, 4, 4)
+        board.add_piece(PAWN, BLACK, 2, 2)
+        board.add_piece(BISHOP, BLACK, 0, 0)
+
+        _, pin_coords, _ = get_king_state(board, WHITE)
+
+        self.assertContainsExactly(pin_coords, [[2, 2]])
+
+        board.remove_piece_at(4, 4)
+        board.remove_piece_at(0, 0)
+
+        board.add_piece(KING, WHITE, 4, 0)
+        board.add_piece(QUEEN, BLACK, 0, 4)
+
+        _, pin_coords, _ = get_king_state(board, WHITE)
+
+        self.assertContainsExactly(pin_coords, [[2, 2]])
