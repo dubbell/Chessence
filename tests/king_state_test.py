@@ -9,7 +9,7 @@ from tests.test_utils import CustomAssert
 
 
 
-class TestKingState(unittest.TestCase, CustomAssert):
+class KingStateTest(unittest.TestCase, CustomAssert):
 
     def test_diagonal_pins(self):
         king_coord = np.array([4, 4])

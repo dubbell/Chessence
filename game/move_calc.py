@@ -203,7 +203,7 @@ def get_moves(board : Board, team : Team, en_passant : np.array | Tuple[int, int
 
         queen_coord = queen_piece.coord
 
-        if (pin_map[*bishop_coord] == 0).all():
+        if (pin_map[*queen_coord] == 0).all():
             queen_dirs = np.array([[-1, 0], [0, 1], [0, -1], [1, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]])
         else:
             queen_dirs = np.array([pin_map[*queen_coord], -pin_map[*queen_coord]])
@@ -224,7 +224,7 @@ def get_moves_along_directions(origin : np.array, dirs : np.array, team_pop : np
 
     moves = []
 
-    for dist in range(7):
+    for dist in range(1, 8):
         if len(dirs) == 0:
             break
 
@@ -232,7 +232,7 @@ def get_moves_along_directions(origin : np.array, dirs : np.array, team_pop : np
         remove = []
 
         for dir_index, to_coord in enumerate(to_coords):
-            if team_pop[*to_coord] or not within_bounds(*to_coord):
+            if not within_bounds(*to_coord) or team_pop[*to_coord]:
                 remove.append(dir_index)
             elif oppo_pop[*to_coord]:
                 moves.append(to_coord)

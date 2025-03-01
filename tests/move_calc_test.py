@@ -7,7 +7,7 @@ from game.move_calc import get_moves
 from tests.test_utils import CustomAssert
 
 
-class TestMoveCalc(unittest.TestCase, CustomAssert):
+class MoveCalcTest(unittest.TestCase, CustomAssert):
 
     def test_king_moves(self):
         for king_coord in np.array([[rank, file] for rank in range(8) for file in range(8)]):
@@ -204,7 +204,7 @@ class TestMoveCalc(unittest.TestCase, CustomAssert):
         board.add_piece(ROOK, BLACK, 0, 5)  # pins pawn
         moves = get_moves(board, WHITE)
 
-        self.assertContainsExactly(moves[pawn_piece2], [Move([3, 5])])
+        self.assertContainsExactly(moves[pawn_piece2], [Move([3, 5])]) # can only move forward
     
 
     def test_pawn_en_passant(self):
@@ -256,3 +256,175 @@ class TestMoveCalc(unittest.TestCase, CustomAssert):
         board.remove_piece_at(3, 2)
         board.add_piece(ROOK, WHITE, 3, 5)
         self.assertContainsExactly(moves[pawn_piece], [Move([2, 4]), Move([2, 3])])
+
+
+    def test_knight_moves(self):
+        board = Board()
+
+        knight_piece = board.add_piece(KNIGHT, WHITE, 4, 4)
+
+        true_moves = [Move(knight_piece.coord + [rank_diff, file_diff])
+                      for rank_diff in [-2, -1, 1, 2]
+                      for file_diff in [-2, -1, 1, 2]
+                      if abs(rank_diff) != abs(file_diff)]
+        
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[knight_piece], true_moves)
+
+        # friendly blocking piece
+        board.add_piece(PAWN, WHITE, 3, 2)
+        true_moves.remove(Move([3, 2]))
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[knight_piece], true_moves)
+
+        # opponent piece can be captured
+        board.add_piece(PAWN, BLACK, 5, 6)
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[knight_piece], true_moves)
+
+        # pinned
+        board.add_piece(KING, WHITE, 7, 7)
+        board.add_piece(BISHOP, BLACK, 1, 1)
+        moves = get_moves(board, WHITE)
+        self.assertNotIn(knight_piece, moves)
+
+        # knight on edge
+        knight_piece = board.add_piece(KNIGHT, WHITE, 0, 0)
+        true_moves = [Move(move) for move in [[2, 1], [1, 2]]]
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[knight_piece], true_moves)
+
+
+    def test_bishop_moves(self):
+        board = Board()
+
+        bishop_piece = board.add_piece(BISHOP, WHITE, 2, 3)
+
+        true_moves = []
+
+        for diff in np.array([[-1, -1], [-1, 1], [1, -1], [1, 1]]):
+            to_coord = bishop_piece.coord + diff
+            while within_bounds(*to_coord):
+                true_moves.append(Move(to_coord))
+                to_coord = to_coord + diff
+        
+        moves = get_moves(board, WHITE)
+        print(moves)
+
+        self.assertContainsExactly(moves[bishop_piece], true_moves)
+
+        board.add_piece(KING, WHITE, 4, 5)
+        true_moves.remove(Move([4, 5]))
+        true_moves.remove(Move([5, 6]))
+        true_moves.remove(Move([6, 7]))
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[bishop_piece], true_moves)
+
+        board.add_piece(BISHOP, BLACK, 0, 1)
+        for diff in np.array([[-1, 1], [1, -1]]):
+            to_coord = bishop_piece.coord + diff
+            while within_bounds(*to_coord):
+                true_moves.remove(Move(to_coord))
+                to_coord = to_coord + diff
+        
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[bishop_piece], true_moves)
+
+        board.remove_piece_at(4, 5)
+        board.add_piece(KING, WHITE, 2, 7)
+        board.add_piece(ROOK, BLACK, 2, 0)
+        moves = get_moves(board, WHITE)
+        self.assertNotIn(bishop_piece, moves)
+
+
+    def test_rook_moves(self):
+        board = Board()
+
+        rook_piece = board.add_piece(ROOK, WHITE, 2, 3)
+
+        true_moves = []
+
+        for diff in np.array([[0, 1], [0, -1], [1, 0], [-1, 0]]):
+            to_coord = rook_piece.coord + diff
+            while within_bounds(*to_coord):
+                true_moves.append(Move(to_coord))
+                to_coord = to_coord + diff
+        
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[rook_piece], true_moves)
+
+        board.add_piece(KING, WHITE, 6, 3)
+        true_moves.remove(Move([6, 3]))
+        true_moves.remove(Move([7, 3]))
+
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[rook_piece], true_moves)
+
+        board.add_piece(ROOK, BLACK, 0, 3)
+        for diff in np.array([[0, 1], [0, -1]]):
+            to_coord = rook_piece.coord + diff
+            while within_bounds(*to_coord):
+                true_moves.remove(Move(to_coord))
+                to_coord = to_coord + diff
+        
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[rook_piece], true_moves)
+
+        board.remove_piece_at(6, 3)
+        board.add_piece(KING, WHITE, 6, 7)
+        board.add_piece(BISHOP, BLACK, 0, 1)
+
+        moves = get_moves(board, WHITE)
+        self.assertNotIn(rook_piece, moves)
+
+
+    def test_queen_moves(self):
+        board = Board()
+
+        queen_piece = board.add_piece(QUEEN, WHITE, 2, 3)
+
+        true_moves = []
+
+        for diff in np.array([[-1, -1], [-1, 1], [1, -1], [1, 1], [0, 1], [0, -1], [1, 0], [-1, 0]]):
+            to_coord = queen_piece.coord + diff
+            while within_bounds(*to_coord):
+                true_moves.append(Move(to_coord))
+                to_coord = to_coord + diff
+        
+        moves = get_moves(board, WHITE)
+        print(moves)
+
+        self.assertContainsExactly(moves[queen_piece], true_moves)
+
+        board.add_piece(KING, WHITE, 4, 5)
+        true_moves.remove(Move([4, 5]))
+        true_moves.remove(Move([5, 6]))
+        true_moves.remove(Move([6, 7]))
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[queen_piece], true_moves)
+
+        board.add_piece(BISHOP, BLACK, 0, 1)
+        for diff in np.array([[-1, 1], [1, -1], [0, 1], [0, -1], [1, 0], [-1, 0]]):
+            to_coord = queen_piece.coord + diff
+            while within_bounds(*to_coord):
+                true_moves.remove(Move(to_coord))
+                to_coord = to_coord + diff
+        
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[queen_piece], true_moves)
+
+        board.remove_piece_at(4, 5)
+        board.add_piece(KING, WHITE, 2, 7)
+        board.add_piece(ROOK, BLACK, 2, 0)
+
+        true_moves = []
+        for diff in np.array([[0, 1], [0, -1]]):
+            to_coord = queen_piece.coord + diff
+            while within_bounds(*to_coord):
+                true_moves.append(Move(to_coord))
+                to_coord = to_coord + diff
+
+        true_moves.remove(Move([2, 7]))
+
+        moves = get_moves(board, WHITE)
+        self.assertContainsExactly(moves[queen_piece], true_moves)
