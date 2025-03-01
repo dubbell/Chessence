@@ -309,7 +309,6 @@ class MoveCalcTest(unittest.TestCase, CustomAssert):
                 to_coord = to_coord + diff
         
         moves = get_moves(board, WHITE)
-        print(moves)
 
         self.assertContainsExactly(moves[bishop_piece], true_moves)
 
@@ -392,7 +391,6 @@ class MoveCalcTest(unittest.TestCase, CustomAssert):
                 to_coord = to_coord + diff
         
         moves = get_moves(board, WHITE)
-        print(moves)
 
         self.assertContainsExactly(moves[queen_piece], true_moves)
 

@@ -1,6 +1,8 @@
-from typing import List, Mapping, Tuple
+from typing import List, Mapping, Tuple, Self
 from ..constants import *
 from .piece import Piece
+from .move import Move
+import copy
 
 
 class Board:
@@ -38,7 +40,7 @@ class Board:
         return "[" + "]\n[".join([" ".join(rank) for rank in board]) + "]"
 
 
-    def get_king(self, team : Team):
+    def get_king(self, team : Team) -> Piece:
         king_pieces = self.of_team_and_type(team, KING)
         if len(king_pieces) > 0:
             return king_pieces[0]
@@ -46,17 +48,17 @@ class Board:
             return None
 
 
-    def of_team(self, team : Team):
+    def of_team(self, team : Team) -> List[Piece]:
         return [piece
                 for piece_list in self.team_and_type_map[team].values()
                 for piece in piece_list]
 
 
-    def of_team_and_type(self, team : Team, piece_type : PieceType):
+    def of_team_and_type(self, team : Team, piece_type : PieceType) -> List[Piece]:
         return self.team_and_type_map[team][piece_type]
 
 
-    def add_piece(self, piece_type : PieceType, team : Team, rank : int, file : int):
+    def add_piece(self, piece_type : PieceType, team : Team, rank : int, file : int) -> Piece:
         assert self.coord_map.get((rank, file)) is None, f"Piece add error: coordinate {(rank, file)} already occupied."
 
         piece = Piece(rank, file, piece_type, team)
@@ -72,9 +74,34 @@ class Board:
     def remove_piece_at(self, rank : int, file : int):
         piece = self.coord_map.pop((rank, file), None)
 
-        assert piece is not None, f"Piece remove error: coordinate {(rank, file)} already empty."
+        if piece is None:
+            return
 
         # remove references
         self.pieces.remove(piece)
         self.team_and_type_map[piece.team][piece.piece_type].remove(piece)
-        self.coord_map
+    
+
+    def move_piece(self, piece : Piece, move : Move):
+        self.remove_piece_at(*move.to_coord)
+        self.coord_map.pop(tuple(piece.coord))
+        self.coord_map[*move.to_coord] = piece
+        piece.coord = move.to_coord
+
+
+    def move_to_new_board(self, piece : Piece, move : Move) -> Self:
+        copied_board = copy.deepcopy(self)
+        copied_piece = copied_board.coord_map[*piece.coord]
+        copied_board.move_piece(copied_piece, move)
+        return copied_board
+        
+
+    def get_state(self) -> np.array:
+        # each channel represents a team/piece_type pair
+        state = np.zeros((16, 8, 8))
+
+        for piece in self.pieces:
+            channel_index = (0 if piece.team == WHITE else 8) + piece.piece_type.value
+            state[channel_index, *piece.coord] = 1
+        
+        return state
