@@ -1,6 +1,6 @@
-from constants import *
 from typing import List, Mapping, Tuple
-from piece import Piece
+from ..constants import *
+from .piece import Piece
 
 
 class Board:

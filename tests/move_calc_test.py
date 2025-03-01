@@ -1,16 +1,10 @@
 import unittest
 
-import numpy as np
-
 from game.model import Board, Move
-
 from game.constants import *
 from game.utils import within_bounds
-
 from game.move_calc import get_moves
-
-from test.utils import CustomAssert
-
+from tests.test_utils import CustomAssert
 
 
 class TestMoveCalc(unittest.TestCase, CustomAssert):

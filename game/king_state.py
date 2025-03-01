@@ -1,5 +1,5 @@
-from model import Board
-from constants import *
+from .model import Board
+from .constants import *
 
 queen_corner_ = np.array([
     [0, 1, 1],

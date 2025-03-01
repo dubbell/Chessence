@@ -1,14 +1,10 @@
 import unittest
 
-import numpy as np
 from numpy.testing import assert_array_equal
-
-from test.utils import CustomAssert
-
 from game.model import Board
-from game.constants import *
-
 from game.king_state import get_king_state
+from game.constants import *
+from tests.test_utils import CustomAssert
 
 
 
