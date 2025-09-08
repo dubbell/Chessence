@@ -6,7 +6,7 @@ from .king_state import get_king_state
 from .utils import within_bounds
 
 
-def get_moves(board : Board, team : Team, en_passant : np.array | Tuple[int, int] = None) -> List[Tuple[int, np.array]]:
+def get_moves(board : Board, team : Team, en_passant : np.array | Tuple[int, int] = None) -> Mapping[Piece, List[Move]]:
     """Returns map from pieces to a lists of moves.
        None if in checkmate, and {} if no moves are available (stalemate)."""
 

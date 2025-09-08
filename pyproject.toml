@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chessence"
+version = "0.1"
+authors = [
+    { name = "Linus Lundgren", email = "linus.c.lundgren@gmail.com" },
+]
+description = "Playing around with chess bots."
+readme = "README.md"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+pythonpath = "src"
+testpaths = ["tests"]
+
+[tool.ruff]
+src = ["src"]
