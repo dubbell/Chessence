@@ -105,3 +105,7 @@ class Board:
             state[channel_index, *piece.coord] = 1
         
         return state
+    
+
+    def reset():
+        """Reset board to initial positions."""
