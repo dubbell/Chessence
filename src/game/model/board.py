@@ -2,7 +2,11 @@ from typing import List, Mapping, Tuple, Self
 from ..constants import *
 from .piece import Piece
 from .move import Move
+from ..utils import within_bounds
 import copy
+
+
+PIECE_TYPE_ORDER = [ROOK, KNIGHT, BISHOP, QUEEN, KING, BISHOP, KNIGHT, ROOK]
 
 
 class Board:
@@ -21,8 +25,8 @@ class Board:
         self.coord_map = {}
         self.team_and_type_map = \
             { team : { piece_type : [] 
-                    for piece_type in [KING, QUEEN, ROOK, BISHOP, KNIGHT, PAWN] } 
-            for team in [WHITE, BLACK] }
+                       for piece_type in [KING, QUEEN, ROOK, BISHOP, KNIGHT, PAWN] } 
+              for team in [WHITE, BLACK] }
         
 
     def __repr__(self):
@@ -59,6 +63,7 @@ class Board:
 
 
     def add_piece(self, piece_type : PieceType, team : Team, rank : int, file : int) -> Piece:
+        assert within_bounds(rank, file), "position out of bounds"
         assert self.coord_map.get((rank, file)) is None, f"Piece add error: coordinate {(rank, file)} already occupied."
 
         piece = Piece(rank, file, piece_type, team)
@@ -72,6 +77,7 @@ class Board:
 
 
     def remove_piece_at(self, rank : int, file : int):
+        assert within_bounds(rank, file), "position out of bounds"
         piece = self.coord_map.pop((rank, file), None)
 
         if piece is None:
@@ -83,10 +89,18 @@ class Board:
     
 
     def move_piece(self, piece : Piece, move : Move):
+        if piece.piece_type == PAWN and piece.team == BLACK and piece.coord[0] == 1 and move.to_coord[0] == 3 or \
+                piece.piece_type == PAWN and piece.team == WHITE and piece.coord[0] == 6 and move.to_coord[0] == 4:
+            en_passant = move.to_coord
+        else:
+            en_passant = None
+
         self.remove_piece_at(*move.to_coord)
         self.coord_map.pop(tuple(piece.coord))
         self.coord_map[*move.to_coord] = piece
         piece.coord = move.to_coord
+
+        return en_passant
 
 
     def move_to_new_board(self, piece : Piece, move : Move) -> Self:
@@ -107,5 +121,13 @@ class Board:
         return state
     
 
-    def reset():
+    def reset(self):
         """Reset board to initial positions."""
+        while len(self.pieces) > 0:
+            self.remove_piece_at(*self.pieces[0].coord)
+
+        for file in range(8):
+            self.add_piece(PIECE_TYPE_ORDER[file], BLACK, 0, file)
+            self.add_piece(PAWN, BLACK, 1, file)
+            self.add_piece(PIECE_TYPE_ORDER[file], WHITE, 7, file)
+            self.add_piece(PAWN, WHITE, 6, file)
