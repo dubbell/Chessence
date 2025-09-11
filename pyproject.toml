@@ -9,6 +9,9 @@ authors = [
     { name = "Linus Lundgren", email = "linus.c.lundgren@gmail.com" },
 ]
 description = "Playing around with chess bots."
+dependencies = [
+    "numpy", "torch", "pytest"
+]
 readme = "README.md"
 
 [tool.pytest.ini_options]

@@ -1,4 +1,5 @@
 from .common import Actor, Critic, StateEncoder
+import numpy as np
 
 
 class SAC:

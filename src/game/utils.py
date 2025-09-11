@@ -1,5 +1,4 @@
 from .constants import *
-from .model import Board
 
 
 piece_to_files = [

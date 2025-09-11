@@ -1,5 +1,7 @@
 import torch.nn as nn
+import torch
 from torch import Tensor
+from game.constants import Team, BLACK
 
 
 class SimpleConv(nn.Module):
@@ -24,7 +26,7 @@ class SimpleConv(nn.Module):
         
 
 class StateEncoder(nn.Module):
-    """Takes board state and outputs 512 dim embedding."""
+    """Takes board state and outputs 511 dim embedding, to be concatenated with team."""
 
     def __init__(self):
         super().__init__()
@@ -35,14 +37,16 @@ class StateEncoder(nn.Module):
             SimpleConv(32, 32, False), # outputs 5x5 
             SimpleConv(64, 64, False), # outputs 4x4 
             SimpleConv(64, 64, False), # outputs 3x3
-            SimpleConv(128, 128, False), # outputs 2x2
+            SimpleConv(64, 128, False), # outputs 2x2
+            SimpleConv(128, 511, False), # outputs 1x1
             nn.Flatten())
     
-    def forward(self, x : Tensor):
-        return self.conv(x)
+    def forward(self, board_state : Tensor) -> Tensor:
+        return self.conv(board_state)
 
 
 class Critic(nn.Module):
+    """Value function, takes team and board embedding (1 and 511) and produces estimated value."""
     
     def __init__(self):
         super().__init__()
@@ -59,8 +63,10 @@ class Critic(nn.Module):
             nn.Linear(512, 1))
         
     
-    def forward(self, x : Tensor):
-        return self.linear(x).squeeze()
+    def forward(self, board_emb : Tensor, team : Team):
+        team_num = (-1 if team == BLACK else 1)
+        torch.concat((board_emb, team_num))
+        return self.linear(board_emb).squeeze()
         
 
 class Actor(nn.Module):

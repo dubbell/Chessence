@@ -1,9 +1,0 @@
-name: chessence
-channels:
-- pytorch
-- nvidia
-- conda-forge
-dependencies:
-- pytorch
-- numpy
-- pytest

@@ -1,0 +1,5 @@
+algorithm: SAC
+max_timesteps: 100000
+checkpoint: false
+train_start: 10000
+train_interval: 1000
