@@ -35,13 +35,15 @@ class StateEncoder(nn.Module):
             SimpleConv(16, 32, False),  # outputs 7x7
             SimpleConv(32, 32, False), # outputs 6x6 
             SimpleConv(32, 32, False), # outputs 5x5 
-            SimpleConv(64, 64, False), # outputs 4x4 
+            SimpleConv(32, 64, False), # outputs 4x4 
             SimpleConv(64, 64, False), # outputs 3x3
             SimpleConv(64, 128, False), # outputs 2x2
-            SimpleConv(128, 511, False), # outputs 1x1
+            nn.Conv2d(128, 511, kernel_size=2, stride=1), # outputs 1x1
             nn.Flatten())
     
     def forward(self, board_state : Tensor) -> Tensor:
+        if not isinstance(board_state, torch.Tensor):
+            board_state = torch.tensor(board_state)
         return self.conv(board_state)
 
 
