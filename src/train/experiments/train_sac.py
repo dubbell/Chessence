@@ -82,50 +82,58 @@ def train_sac2(config):
     # 16x8x8 state
     white_state, black_state, next_state = board.get_state(), None, None
     white_action, black_action = None, None
-    # map of piece -> list of moves
-    move_map = get_moves(board, WHITE, en_passant)
-    move_matrix = get_move_matrix(move_map)  # matrix representation
 
     train_agent = SAC()
     fixed_agent = SAC()
 
     white_agent, black_agent = train_agent, fixed_agent
 
-    current_team = WHITE
+    current_team = WHITE        
 
-    def reset_game():
-        nonlocal board, en_passant, white_agent, black_agent, black_action, current_team
-        # reset board and switch teams
-        board.reset()
-        en_passant = None
-        white_agent, black_agent = black_agent, white_agent
-        black_action = None  # so that black tuple is not added after first move
-        current_team = WHITE
+    game_step = 0
 
+    # ensures that the black state transition is not added after first move
+    # and so that the final game runs to completion
+    first_step = True
 
-    for step in range(config.max_timesteps):
+    while game_step < config.max_timesteps or not first_step:
         # white move
         if current_team == WHITE:
             next_state, next_white_action, en_passant, move_result = take_action(board, white_agent, current_team, en_passant)
         else:
             next_state, next_black_action, en_passant, move_result = take_action(board, white_agent, current_team, en_passant)
         
+        game_step += 1
+
+        # game continues
         if move_result == CONTINUE:
-            if current_team == WHITE and black_action is not None:  # only insert black action if it is not the first move in the game
-                replay_buffer.insert(black_state, next_state, black_action, 0)
+            #  if it was white's turn, then we should have a new state -> next_state transition for black
+            # but only if it is not the first move in the game, since there is otherwise not a previous state in the transition
+            if current_team == WHITE and not first_step:  
+                replay_buffer.insert(black_state, next_state, black_action, 0, BLACK)
+            #  if it was black's turn, then we should have a new state -> next_state transition for white
             elif current_team == BLACK:
-                replay_buffer.insert(white_state, next_state, white_action, 0)
+                replay_buffer.insert(white_state, next_state, white_action, 0, WHITE)
         
+        # if the game has ended
+        # only loss/draw because it checks if the player has no moves left
         elif move_result in [LOSS, DRAW]:
             # draw (-0.25, -0.25), or white loss (-1, 1), or black loss (1, -1)
+            # draw has slight penalty to discourage
             white_reward, black_reward = \
                 (-0.25, -0.25) if move_result == DRAW else \
                 (-1, 1) if current_team == WHITE else \
                 (1, -1)
             
-            replay_buffer.insert(white_state, next_state, white_action, white_reward)
-            replay_buffer.insert(black_state, next_state, black_action, black_reward)
-            reset_game()
+            replay_buffer.insert(white_state, next_state, white_action, white_reward, WHITE)
+            replay_buffer.insert(black_state, next_state, black_action, black_reward, BLACK)
+            
+            # reset board and switch teams
+            board.reset()
+            first_step = True
+            white_agent, black_agent = black_agent, white_agent
+            current_team = WHITE
+
             continue
 
         if current_team == WHITE:
@@ -134,6 +142,7 @@ def train_sac2(config):
             black_state, black_action = next_state, next_black_action
         
         current_team = other_team(current_team)
+        first_step = False
 
         
 
