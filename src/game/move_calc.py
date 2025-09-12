@@ -13,8 +13,8 @@ def get_moves(board : Board, team : Team, en_passant : np.array | Tuple[int, int
     # map from piece to moves
     moves : Mapping[Piece, List[Move]] = {}
 
-    # draw from threefold repetition
-    if board.check_threefold():
+    # draw from threefold repetition or 50 move rule
+    if board.check_threefold() or board.check_50_move_rule():
         return moves
 
     # controlled squares around king, coords of pieces pinned to king, and the direction from which they are pinned

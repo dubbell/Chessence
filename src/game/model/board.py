@@ -15,6 +15,9 @@ class Board:
 
     # cache of previous positions, to check for threefold
     cache : List[List[Piece]]
+
+    # number of consecutive moves that are made without captures or pawn moves
+    non_pawn_or_capture_moves = 0
     
     # map from coordinates to pieces
     coord_map : Mapping[Tuple[int], Piece]
@@ -79,16 +82,18 @@ class Board:
         return piece
 
 
-    def remove_piece_at(self, rank : int, file : int):
+    def remove_piece_at(self, rank : int, file : int) -> bool:
+        """Removes piece at coord. True if there was a piece there, otherwise False."""
         assert within_bounds(rank, file), "position out of bounds"
         piece = self.coord_map.pop((rank, file), None)
 
         if piece is None:
-            return
+            return False
 
         # remove references
         self.pieces.remove(piece)
         self.team_and_type_map[piece.team][piece.piece_type].remove(piece)
+        return True
     
 
     def move_piece(self, piece : Piece, move : Move):
@@ -100,12 +105,22 @@ class Board:
 
         self.cache.append(copy.deepcopy(self.pieces))
 
-        self.remove_piece_at(*move.to_coord)
+        if self.remove_piece_at(*move.to_coord) or piece.piece_type == PAWN:
+            self.non_pawn_or_capture_moves = 0
+        else:
+            self.non_pawn_or_capture_moves += 1
         self.coord_map.pop(tuple(piece.coord))
         self.coord_map[*move.to_coord] = piece
         piece.coord = move.to_coord
 
         return en_passant
+
+
+    def check_50_move_rule(self):
+        """Check for 50 move rule."""
+        if self.non_pawn_or_capture_moves >= 50:
+            return True
+        return False
 
 
     def check_threefold(self):
