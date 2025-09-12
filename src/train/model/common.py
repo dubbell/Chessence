@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 from torch import Tensor
 from game.constants import Team, BLACK
+from typing import List
 
 
 class SimpleConv(nn.Module):
@@ -65,10 +66,12 @@ class Critic(nn.Module):
             nn.Linear(512, 1))
         
     
-    def forward(self, board_emb : Tensor, team : Team):
-        team_num = (-1 if team == BLACK else 1)
-        torch.concat((board_emb, team_num))
-        return self.linear(board_emb).squeeze()
+    def forward(self, board_emb : Tensor, teams : List[Team]):
+        team_nums = torch.tensor(list(map(lambda team: -1 if team == BLACK else 1, teams)), dtype=torch.float32).reshape(-1, 1)
+        if not isinstance(board_emb, torch.Tensor):
+            board_emb = torch.tensor(board_emb, dtype=torch.float32)
+        stacked = torch.hstack((board_emb, team_nums))
+        return self.linear(stacked).squeeze()
         
 
 class Actor(nn.Module):
@@ -89,15 +92,17 @@ class Actor(nn.Module):
 
         self.selector = nn.Sequential(
             nn.Linear(512, 64),
-            nn.Softmax(64))
+            nn.Softmax(1))
         
         self.targeter = nn.Sequential(
             nn.Linear(512, 64),
-            nn.Softmax(64))
+            nn.Softmax(1))
     
-    def forward(self, x : Tensor):
-        x = self.body(x)
-        select_distr = self.selector(x)
-        target_distr = self.targeter(x)
+    def forward(self, board_emb : Tensor, teams : List[Team]):
+        team_nums = torch.tensor(list(map(lambda team: -1 if team == BLACK else 1, teams)), dtype=torch.float32).reshape(-1, 1)
+        if not isinstance(board_emb, torch.Tensor):
+            board_emb = torch.tensor(board_emb, dtype=torch.float32)
+        stacked = torch.hstack((board_emb, team_nums))
+        projected = self.body(stacked)
 
-        return select_distr, target_distr
+        return self.selector(projected), self.targeter(projected)

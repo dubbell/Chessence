@@ -7,7 +7,7 @@ class ReplayBuffer(Dataset):
     def __init__(self, capacity = 10000):
         self.buffer = deque(maxlen=capacity)
 
-    def insert(self, state, action, reward, next_state):
+    def insert(self, state, next_state, action, reward):
         self.buffer.append((state, action, reward, next_state))
 
     def __len__(self):

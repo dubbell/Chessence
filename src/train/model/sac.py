@@ -1,6 +1,6 @@
 from .common import Actor, Critic, StateEncoder
+from game.constants import Team
 import numpy as np
-
 
 class SAC:
     """Soft Actor-Critic implementation."""
@@ -22,19 +22,10 @@ class SAC:
         self.critic = Critic()
 
     
-    def sample_action(self, board_state, move_matrix):
-        """
-        Samples action. Returns None if no action is possible (shouldn't happen).
-
-        board_state : 16x8x8 matrix
-        move_matrix : 64x64 matrix, 
-        - row is selection position
-        - col is target position
-        - [row, col] determines if generated move is valid
-        """
-        embedding = self.encoder(board_state)
-        select_distr, target_distr = self.actor(embedding)
-
+    def get_sampled_action_(self, select_distr, target_distr, move_matrix):
+        """Get sampled action given select and target distributions, along with the available moves in a 64x64 move matrix.
+           Returns None if no action is possible (should not happen)."""
+        
         # loop through selection coords in reverse order, i.e. highest selection value first
         for select_idx in select_distr.argsort()[::-1]:
             if move_matrix[select_idx].sum() == 0:
@@ -45,5 +36,22 @@ class SAC:
                     continue
                 else:
                     return select_idx, target_idx
-        
+
         return None
+        
+
+    
+    def sample_action(self, board_state, move_matrix, team : Team):
+        """
+        Samples action. Returns None if no action is possible (shouldn't happen).
+
+        board_state : Bx16x8x8 matrix (B = batch size)
+        move_matrix : 64x64 matrix, 
+        - row is selection position
+        - col is target position
+        - [row, col] determines if generated move is valid
+        """
+        embedding = self.encoder(board_state)
+        select_distr, target_distr = self.actor(embedding, [team])
+
+        return self.get_sampled_action_(select_distr, target_distr, move_matrix)
