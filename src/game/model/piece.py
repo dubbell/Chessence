@@ -15,3 +15,9 @@ class Piece:
     
     def __repr__(self):
         return f"{self.team} {self.piece_type} : {self.coord}"
+
+
+    def __eq__(self, other_piece):
+        return (self.coord == other_piece.coord).all() and \
+            self.piece_type == other_piece.piece_type and \
+            self.team == other_piece.team

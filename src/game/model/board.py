@@ -13,21 +13,24 @@ class Board:
     # all pieces on the board
     pieces : List[Piece]
 
+    # cache of previous positions, to check for threefold
+    cache : List[List[Piece]]
+    
     # map from coordinates to pieces
     coord_map : Mapping[Tuple[int], Piece]
     
     # map from team and piece type to piece
     team_and_type_map : Mapping[Team, Mapping[PieceType, List[Piece]]]
-    
+
 
     def __init__(self):
         self.pieces = []
+        self.cache = []
         self.coord_map = {}
         self.team_and_type_map = \
             { team : { piece_type : [] 
                        for piece_type in [KING, QUEEN, ROOK, BISHOP, KNIGHT, PAWN] } 
               for team in [WHITE, BLACK] }
-        
 
     def __repr__(self):
         board = np.array([["  " for _ in range(8)] for _ in range(8)])
@@ -95,12 +98,29 @@ class Board:
         else:
             en_passant = None
 
+        self.cache.append(copy.deepcopy(self.pieces))
+
         self.remove_piece_at(*move.to_coord)
         self.coord_map.pop(tuple(piece.coord))
         self.coord_map[*move.to_coord] = piece
         piece.coord = move.to_coord
 
         return en_passant
+
+
+    def check_threefold(self):
+        """Check for threefold repetition."""
+        count = 0
+        for cached_pieces in self.cache:
+            if len(cached_pieces) != len(self.pieces):
+                continue
+            
+            if np.all([cached_piece == current_piece for cached_piece, current_piece in zip(cached_pieces, self.pieces)]):
+                count += 1
+                if count >= 2:
+                    return True
+
+        return False
 
 
     def move_to_new_board(self, piece : Piece, move : Move) -> Self:
@@ -125,6 +145,8 @@ class Board:
         """Reset board to initial positions."""
         while len(self.pieces) > 0:
             self.remove_piece_at(*self.pieces[0].coord)
+
+        self.cache = []
 
         for file in range(8):
             self.add_piece(PIECE_TYPE_ORDER[file], BLACK, 0, file)
