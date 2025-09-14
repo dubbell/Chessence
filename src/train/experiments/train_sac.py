@@ -71,17 +71,6 @@ def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
     return next_state, action, en_passant, move_matrix, CONTINUE
 
 
-def train_agent(agent :  SAC, replay_buffer : ReplayBuffer):
-    batch = replay_buffer.sample_batch()
-
-
-
-    
-
-
-
-
-
 def train_sac(config):
     mlflow.set_tracking_uri(uri="http://127.0.0.1:8080")
 
@@ -108,6 +97,14 @@ def train_sac(config):
     first_step = True
 
     while step < config.max_timesteps or not first_step:
+        # train non-fixed agent
+        if step >= config.train_start and step % config.train_interval == 0:
+            train_agent.train_step(replay_buffer.sample_batch())
+
+        # update fixed agent parameters to trained agent parameters
+        if step % config.update_interval:
+            fixed_agent.load_state_dict(train_agent.state_dict())
+
         # white move
         if current_team == WHITE:
             next_state, next_white_action, en_passant, next_white_move_matrix, move_result = take_action(board, white_agent, current_team, en_passant)
