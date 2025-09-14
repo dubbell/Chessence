@@ -3,19 +3,11 @@ import argparse
 from train.experiments.train_sac import train_sac
 
 
-def get_args():
+def get_config():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, help="Config file to train bot.")
 
-    return parser.parse_args()
-
-
-# required entries in configuration file
-REQ_CONFIG = ["algorithm", "max_timesteps", "checkpoint"]
-
-def main():
-    # get run configuration
-    args = get_args()
+    args = parser.parse_args()
     assert args.config is not None, "Please provide config file."
     try:
         with open(args.config, "r") as file:
@@ -23,6 +15,22 @@ def main():
     except:
         raise IOError("Config file not found.")
     
+    return config
+
+
+# required entries in configuration file
+REQ_CONFIG = [
+    "algorithm", 
+    "max_timesteps", 
+    "checkpoint", 
+    "train_start", 
+    "train_interval", 
+    "update_interval"
+]
+
+def main():
+    # get run configuration
+    config = get_config()
 
     for req in REQ_CONFIG:
         assert req in config, f"Config missing: `{req}`"

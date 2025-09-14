@@ -3,8 +3,8 @@ from enum import Enum
 
 
 class Team(Enum):
-    WHITE = 0
-    BLACK = 1
+    WHITE = 1
+    BLACK = -1
 
     def __eq__(self, other):
         return isinstance(other, Enum) and self.value == other.value

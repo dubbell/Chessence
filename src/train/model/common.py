@@ -49,13 +49,13 @@ class StateEncoder(nn.Module):
 
 
 class Critic(nn.Module):
-    """Value function, takes team and board embedding (1 and 511) and produces estimated value."""
+    """Action-value function, takes team and board embedding (1 and 511) and produces estimated value."""
     
     def __init__(self):
         super().__init__()
 
         self.linear = nn.Sequential(
-            nn.Linear(512, 512), 
+            nn.Linear(640, 512), 
             nn.Dropout(p=0.2),
             nn.BatchNorm1d(512),
             nn.ReLU(),
@@ -66,12 +66,25 @@ class Critic(nn.Module):
             nn.Linear(512, 1))
         
     
-    def forward(self, board_emb : Tensor, teams : List[Team]):
-        team_nums = torch.tensor(list(map(lambda team: -1 if team == BLACK else 1, teams)), dtype=torch.float32).reshape(-1, 1)
-        if not isinstance(board_emb, torch.Tensor):
-            board_emb = torch.tensor(board_emb, dtype=torch.float32)
-        stacked = torch.hstack((board_emb, team_nums))
+    def forward(self, board_embs : Tensor, teams : Tensor, selections : Tensor, targets : Tensor):
+        one_hot_select = nn.functional.one_hot(selections, 64)
+        one_hot_target = nn.functional.one_hot(targets, 64)
+        stacked = torch.hstack((board_embs, teams, one_hot_select, one_hot_target))
         return self.linear(stacked).squeeze()
+
+
+class DoubleCritic(nn.Module):
+    """Double critic implementation to account for overestimation bias in Q-values."""
+
+    def __init__(self):
+        super().__init__()
+
+        self.critic1 = Critic()
+        self.critic2 = Critic()
+
+    def forward(self, board_embs : Tensor, teams : Tensor, selections : Tensor, targets : Tensor):
+        return self.critic1(board_embs, teams, selections, targets), self.critic2(board_embs, teams, selections, targets)
+        
         
 
 class Actor(nn.Module):
@@ -98,11 +111,8 @@ class Actor(nn.Module):
             nn.Linear(512, 64),
             nn.Softmax(1))
     
-    def forward(self, board_emb : Tensor, teams : List[Team]):
-        team_nums = torch.tensor(list(map(lambda team: -1 if team == BLACK else 1, teams)), dtype=torch.float32).reshape(-1, 1)
-        if not isinstance(board_emb, torch.Tensor):
-            board_emb = torch.tensor(board_emb, dtype=torch.float32)
-        stacked = torch.hstack((board_emb, team_nums))
+    def forward(self, board_embs : Tensor, teams : Tensor):
+        stacked = torch.hstack((board_embs, teams))
         projected = self.body(stacked)
 
         return self.selector(projected), self.targeter(projected)
