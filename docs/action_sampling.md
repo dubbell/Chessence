@@ -11,14 +11,13 @@ Inputs:
 - $p_s \in \mathbb R^{B \times 64}$ (`select` distributions)
 - $p_t \in \mathbb R^{B \times 64}$ (`target` distributions)
 ```
-1: s_filter = M.any(axis=2)                # given select, if any target is available
-2: s_filtered = s_filter * p_s             # multiply by 0 in p_s if select has no targets
-3: select = s_filtered.argmax(axis=1)      # select = highest in filtered p_s
-4: t_filter = M[arange(B), select]         # available targets for the select in each batch item
-5: t_filtered = t_filter * p_t             # multiply by 0 in p_t if target not available
-6: target = t_filtered.argmax(axis=1)      # target = highest in filtered p_t
-7: return: 
-      select, 
-      target, 
-      log(p_s[select]) + log(p_t[target])  # log likelihood
+1: s_filter = M.any(axis=2)                            # given select, if any target is available
+2: s_filtered = s_filter * p_s                         # multiply by 0 in p_s if select has no targets
+3: select = s_filtered.argmax(axis=1)                  # select = highest in filtered p_s
+4: t_filter = M[arange(B), select]                     # available targets for the select in each batch item
+5: t_filtered = t_filter * p_t                         # multiply by 0 in p_t if target not available
+6: target = t_filtered.argmax(axis=1)                  # target = highest in filtered p_t
+7: select_logp = log(p_s[select] / s_filtered.sum())   # log likelihood for selection
+8: target_logp = log(p_t[target] / t_filtered.sum())   # log likelihood for target, given selection
+9: return: select, target, select_logp + target_logp
 ```
