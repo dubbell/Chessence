@@ -46,7 +46,7 @@ def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
     """
     Let agent take action on board for the given team.
     Input: the board, the agent, and the agent's team
-    Output: next state, selection, target, move matrix, potential en passant location
+    Output: next state, move matrix, action, potential en passant location, result
     """
 
     current_state = board.get_state()
@@ -69,7 +69,8 @@ def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
     
     next_state = board.get_state()
 
-    return next_state, action, en_passant, move_matrix, CONTINUE
+    return next_state, move_matrix, action, en_passant, CONTINUE
+
 
 
 def get_run_name():
@@ -81,7 +82,7 @@ def get_latest_commit_hash():
     repo = git.Repo(".", search_parent_directories=True)
     return repo.head.commit.hexsha
 
-    
+
 def start_training(config):
     replay_buffer = ReplayBuffer()
 
@@ -89,10 +90,7 @@ def start_training(config):
     board.reset()
     en_passant = None
 
-    # 16x8x8 state
-    white_state, black_state, next_state = board.get_state(), None, None
-    white_action, black_action = None, None
-    white_move_matrix, black_move_matrix = None, None
+    state = board.get_state()
 
     train_agent, fixed_agent = SAC(), SAC()
     white_agent, black_agent = train_agent, fixed_agent
@@ -122,48 +120,32 @@ def start_training(config):
             next_pb_step += step_size
             pb.update()
 
-        # train non-fixed agent
+        # TRAINING AT SET INTERVALS
         if step >= config["train_start"] and step % config["train_interval"] == 0:
             train_agent.train_step(replay_buffer.sample_batch())
 
-        # update fixed agent parameters to trained agent parameters
+        # UPDATE FIXED AGENT
         if step % config["update_interval"]:
             fixed_agent.load_state_dict(train_agent.state_dict())
 
-        # white move
-        if current_team == WHITE:
-            next_state, next_white_action, en_passant, next_white_move_matrix, move_result = take_action(board, white_agent, current_team, en_passant)
-        else:
-            next_state, next_black_action, en_passant, next_black_move_matrix, move_result = take_action(board, white_agent, current_team, en_passant)
+        # TAKE ENVIRONMENT STEP
+        next_state, move_matrix, action, en_passant, move_result = \
+            take_action(board, white_agent if current_team == WHITE else black_agent, current_team, en_passant)
         
         step += 1
 
-        # game continues
+        # REPLAY BUFFER INSERTION
         if move_result == CONTINUE:
-            #  if it was white's turn, then we should have a new state -> next_state transition for black
-            # but only if it is not the first move in the game, since there is otherwise not a previous state in the transition
-            if current_team == WHITE and not first_step:  
-                replay_buffer.insert(black_state, next_state, *black_action, black_move_matrix, 0, BLACK)
-            #  if it was black's turn, then we should have a new state -> next_state transition for white
-            elif current_team == BLACK:
-                replay_buffer.insert(white_state, next_state, *white_action, white_move_matrix, 0, WHITE)
-        
-        # if the game has ended, by checking if the current player has no moves left
-        elif move_result in [LOSS, DRAW]:
-            # draw (-0.1, -0.1), or white loss (-1, 1), or black loss (1, -1)
-            # draw has slight penalty to discourage
-            white_reward, black_reward = \
-                (-0.1, -0.1) if move_result == DRAW else \
-                (-1, 1) if current_team == WHITE else \
-                (1, -1)
-            
-            replay_buffer.insert(white_state, next_state, *white_action, white_move_matrix, white_reward, WHITE)
-            replay_buffer.insert(black_state, next_state, *black_action, black_move_matrix, black_reward, BLACK)
+            replay_buffer.insert(state, move_matrix, *action, 0, current_team)
+        else: 
+            # if the game has ended, i.e. player had no moves available,
+            # set rewards for previous moves
+            replay_buffer.set_win_rewards(move_result)
             
             # reset board and switch teams
             board.reset()
             first_step = True
-            white_state = board.get_state()
+            state = board.get_state()
             white_agent, black_agent = black_agent, white_agent
             current_team = WHITE
 
@@ -177,10 +159,7 @@ def start_training(config):
 
             continue
 
-        if current_team == WHITE:
-            white_state, white_action, white_move_matrix = next_state, next_white_action, next_white_move_matrix
-        else:
-            black_state, black_action, black_move_matrix = next_state, next_black_action, next_black_move_matrix
+        state = next_state
         
         current_team = other_team(current_team)
         first_step = False
