@@ -15,6 +15,10 @@ class Piece:
     
     def __repr__(self):
         return f"{self.team} {self.piece_type} : {self.coord}"
+    
+
+    def __hash__(self):
+        return hash((self.coord[0], self.coord[1], self.piece_type, self.team))
 
 
     def __eq__(self, other_piece):

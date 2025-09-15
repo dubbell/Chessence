@@ -51,11 +51,24 @@ class SAC:
         self.log_alpha = torch.tensor(0.0, requires_grad = True)  # trainable entropy magnitude parameter
         self.target_entropy = -act_dim
 
-        self.optimizer = Adam(lr = lr)
+        params = list(self.encoder.parameters()) + list(self.actor.parameters()) + list(self.critic.parameters())
+        self.optimizer = Adam(params, lr = lr)
+
         self.alpha_loss_func = AlphaLoss()
-        self.actor_loss_func = AlphaLoss()
+        self.actor_loss_func = ActorLoss()
         self.mse_loss_func = nn.MSELoss()
-        
+    
+
+    def state_dict(self):
+        return {
+            "encoder_params" : self.encoder.state_dict(),
+            "actor_params" : self.actor.state_dict(),
+            "critic_params" : self.critic.state_dict()}
+    
+    def load_state_dict(self, state_dict : dict):
+        self.encoder.load_state_dict(state_dict["encoder_params"])
+        self.actor.load_state_dict(state_dict["actor_params"])
+        self.critic.load_state_dict(state_dict["critic_params"])
     
     def train(self):
         self.encoder.train()
@@ -78,7 +91,7 @@ class SAC:
         if not isinstance(move_matrices, Tensor):
             move_matrices = torch.tensor(move_matrices)
         
-        select_filter : Tensor = move_matrices.any(axis=2).to(torch.int16)
+        select_filter : Tensor = move_matrices.any(axis=2)
         filtered_select_distrs = select_filter * select_distrs
         select = filtered_select_distrs.argmax(axis=1)
 
@@ -103,23 +116,31 @@ class SAC:
         - col is target position
         - [row, col] determines if generated move is valid
         """
+        if not isinstance(board_state, Tensor):
+            board_state = torch.tensor(board_state)
+        if not isinstance(move_matrix, Tensor):
+            move_matrix = torch.tensor(move_matrix)
+        if not isinstance(team, Tensor):
+            if isinstance(team, Team):
+                team = torch.tensor(team.value)
+            else:
+                team = torch.tensor(team)
+
         if eval:
             self.eval()
         else:
             self.train()
 
-        embedding = self.encoder(board_state)
-        select_distr, target_distr = self.actor(embedding, [team])
+        embedding = self.encoder(board_state.reshape(1, 16, 8, 8))
+        select_distr, target_distr = self.actor(embedding, team.reshape(-1, 1))
 
-        select, target, _ = self.get_action_samples(select_distr, target_distr, move_matrix)
+        select, target, _ = self.get_action_samples(select_distr.reshape(1, 64), target_distr.reshape(1, 64), move_matrix.reshape(1, 64, 64))
 
         return select, target
     
 
     def actor_alpha_train_step(self, batch : Batch):
         
-        self.train()
-
         self.optimizer.zero_grad()
 
         embeddings = self.encoder(batch.states)
@@ -153,15 +174,13 @@ class SAC:
     
     def critic_train_step(self, batch : Batch, alpha : Tensor):
         
-        self.train()
-
         self.optimizer.zero_grad()
 
         embeddings = self.encoder(batch.states)
         next_embeddings = self.encoder(batch.next_states)
 
         # current q
-        q1, q2 = self.critic(embeddings, batch.teams, batch.selections, batch.targets)
+        q1, q2 = self.critic(embeddings, batch.teams, batch.selections.squeeze(), batch.targets.squeeze())
 
         next_select_distrs, next_target_distrs = self.actor(next_embeddings, batch.teams)
         next_select, next_target, action_logp = self.get_action_samples(next_select_distrs, next_target_distrs, batch.next_move_matrices)
@@ -188,6 +207,7 @@ class SAC:
 
         
     def train_step(self, batch : Batch):
+        self.train()
         actor_log_info = self.actor_alpha_train_step(batch)
         critic_log_info = self.critic_train_step(batch, actor_log_info["alpha"])
 

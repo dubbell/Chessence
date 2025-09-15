@@ -147,11 +147,11 @@ class Board:
 
     def get_state(self) -> np.array:
         # each channel (in dim 2) represents a team/piece_type pair
-        state = np.zeros((1, 16, 8, 8), dtype=np.float32)
+        state = np.zeros((16, 8, 8), dtype=np.float32)
 
         for piece in self.pieces:
             channel_index = (0 if piece.team == WHITE else 8) + piece.piece_type.value
-            state[0, channel_index, *piece.coord] = 1
+            state[channel_index, *piece.coord] = 1
         
         return state
     

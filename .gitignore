@@ -5,3 +5,4 @@ scratchpad.ipynb
 *.egg-info
 test.py
 test.ipynb
+mlruns
