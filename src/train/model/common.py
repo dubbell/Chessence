@@ -70,7 +70,7 @@ class Critic(nn.Module):
         one_hot_select = nn.functional.one_hot(selections, 64)
         one_hot_target = nn.functional.one_hot(targets, 64)
         stacked = torch.hstack((board_embs, teams, one_hot_select, one_hot_target))
-        return self.linear(stacked).squeeze()
+        return self.linear(stacked)
 
 
 class DoubleCritic(nn.Module):

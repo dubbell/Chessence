@@ -5,3 +5,4 @@ train_start: 10000
 train_interval: 1000
 update_interval: 100000
 enable_logging: True
+batch_size: 128

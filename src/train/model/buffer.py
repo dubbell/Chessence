@@ -1,11 +1,10 @@
 import torch
 from torch import Tensor
-from torch.utils.data import Dataset, DataLoader
-from collections import deque
+from torch.utils.data import Dataset
 from game.constants import Team
 from collections import namedtuple
 import numpy as np
-from train.experiments.train_sac import DRAW, LOSS
+from train.utils import DRAW, tensor_check
 
 
 batch_attributes = [
@@ -20,11 +19,6 @@ batch_attributes = [
 
 
 Batch = namedtuple("Batch", batch_attributes)
-
-def tensor_check(data):
-    if not isinstance(data, Tensor):
-        return torch.tensor(data)
-    return data
 
 
 class ReplayBuffer(Dataset):
@@ -42,7 +36,7 @@ class ReplayBuffer(Dataset):
         state, move_matrix, select, target, reward, team = \
             map(tensor_check, [state, move_matrix, select, target, reward, team.value if isinstance(team, Team) else team])
 
-        self.buffer[self.current_idx] = (state, move_matrix, select, target, reward, team)
+        self.buffer[self.current_idx] = [state, move_matrix, select, target, reward, team]
         self.current_idx = (self.current_idx + 1) % self.capacity
         self.length = min(self.capacity, self.length + 1)
     
@@ -52,12 +46,14 @@ class ReplayBuffer(Dataset):
         second = (self.current_idx - 1) % self.length
         # draw
         if move_result == DRAW:
-            self.buffer[first][4] = self.draw_penalty
-            self.buffer[second][4] = self.draw_penalty
+            self.buffer[first][4] = torch.tensor(self.draw_penalty)
+            self.buffer[second][4] = torch.tensor(self.draw_penalty)
         # loss
         else:
-            self.buffer[first][4] = -1  # current player made the move two moves ago, so they are penalized
-            self.buffer[second][4] = 1  # other player therefore won, and is rewarded
+            # current player lost, and they made the move two moves ago, so that move is penalized
+            self.buffer[first][4] = torch.tensor(-1)
+            # other player therefore won, so previous move is rewarded
+            self.buffer[second][4] = torch.tensor(1)
     
     def __len__(self):
         return self.length

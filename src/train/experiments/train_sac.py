@@ -1,16 +1,19 @@
-from ..utils.buffer import ReplayBuffer
+from ..model.buffer import ReplayBuffer
 from game.move_calc import get_moves
 from game.model import Board, Move
 from game.constants import *
 from game.utils import other_team
 from ..model.sac import SAC
+from train.utils import DRAW, LOSS, CONTINUE, MoveResult
 
 import git
-import os
 import numpy as np
 import mlflow
 from datetime import datetime
 from tqdm import tqdm
+
+import torch
+torch.autograd.set_detect_anomaly(True)
 
 def get_move_matrix(move_map):
     """Simplified representation of all available moves. 
@@ -26,21 +29,6 @@ def get_move_matrix(move_map):
     
     return move_matrix
 
-
-class MoveResult(Enum):
-    CONTINUE = 0
-    LOSS = 1
-    DRAW = 2
-
-    def __eq__(self, other):
-        return isinstance(other, Enum) and self.value == other.value
-    
-    def __hash__(self):
-        return self.value
-
-CONTINUE = MoveResult.CONTINUE
-LOSS = MoveResult.LOSS
-DRAW = MoveResult.DRAW
 
 def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
     """
@@ -84,7 +72,7 @@ def get_latest_commit_hash():
 
 
 def start_training(config):
-    replay_buffer = ReplayBuffer()
+    replay_buffer = ReplayBuffer(batch_size = config["batch_size"])
 
     board = Board()
     board.reset()
@@ -111,14 +99,9 @@ def start_training(config):
             "commit": get_latest_commit_hash(),
             **config})
         
-    step_size = 0.0001
-    next_pb_step = step_size
-    pb = tqdm(total = 1 / step_size)
+    pb = tqdm(total = config["max_timesteps"])
     
     while step < config["max_timesteps"] or not first_step:
-        if step / config["max_timesteps"] >= next_pb_step:
-            next_pb_step += step_size
-            pb.update()
 
         # TRAINING AT SET INTERVALS
         if step >= config["train_start"] and step % config["train_interval"] == 0:
@@ -133,6 +116,7 @@ def start_training(config):
             take_action(board, white_agent if current_team == WHITE else black_agent, current_team, en_passant)
         
         step += 1
+        pb.update()
 
         # REPLAY BUFFER INSERTION
         if move_result == CONTINUE:
@@ -150,7 +134,7 @@ def start_training(config):
             current_team = WHITE
 
             if config["enable_logging"]:
-                is_white = game_count % 2 == 0  # if train_agent is white
+                is_white = train_agent == white_agent  # if train_agent is white
                 mlflow.log_metric(
                     "white_win" if is_white else "black_win",
                     int(is_white != (current_team == WHITE)))

@@ -6,7 +6,8 @@ from torch import Tensor
 from torch.optim import Adam
 from torch import nn
 from typing import Tuple
-from train.utils.buffer import Batch
+from train.model.buffer import Batch
+from train.utils import tensor_check
 
 
 class AlphaLoss(nn.Module):
@@ -84,12 +85,7 @@ class SAC:
     def get_action_samples(self, select_distrs : Tensor, target_distrs : Tensor, move_matrices : Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """Get sampled action given select and target distributions, along with the available moves in a 64x64 move matrix.
            Returns selected square, target square, and log likelihood of the total action."""
-        if not isinstance(select_distrs, Tensor):
-            select_distrs = torch.tensor(select_distrs)
-        if not isinstance(target_distrs, Tensor):
-            target_distrs = torch.tensor(target_distrs)
-        if not isinstance(move_matrices, Tensor):
-            move_matrices = torch.tensor(move_matrices)
+        select_distrs, target_distrs, move_matrices = map(tensor_check, [select_distrs, target_distrs, move_matrices])
         
         select_filter : Tensor = move_matrices.any(axis=2)
         filtered_select_distrs = select_filter * select_distrs
@@ -116,15 +112,7 @@ class SAC:
         - col is target position
         - [row, col] determines if generated move is valid
         """
-        if not isinstance(board_state, Tensor):
-            board_state = torch.tensor(board_state)
-        if not isinstance(move_matrix, Tensor):
-            move_matrix = torch.tensor(move_matrix)
-        if not isinstance(team, Tensor):
-            if isinstance(team, Team):
-                team = torch.tensor(team.value)
-            else:
-                team = torch.tensor(team)
+        board_state, move_matrix, team = map(tensor_check, [board_state, move_matrix, team.value if isinstance(team, Team) else team])
 
         if eval:
             self.eval()
@@ -186,9 +174,10 @@ class SAC:
         next_select, next_target, action_logp = self.get_action_samples(next_select_distrs, next_target_distrs, batch.next_move_matrices)
 
         next_q1, next_q2 = self.critic(next_embeddings, batch.teams, next_select.detach(), next_target.detach())
-        next_q = torch.minimum(next_q1, next_q2) - alpha * action_logp.detach()
+        next_q = torch.minimum(next_q1, next_q2) - alpha * action_logp.detach().reshape(-1, 1)
 
-        target_q = batch.rewards + self.gamma * next_q
+        # print(batch.rewards.shape, next_q1.shape, action_logp.shape)
+        target_q = batch.rewards + self.gamma * next_q.reshape(-1, 1)
 
         critic_loss1 = self.mse_loss_func(q1, target_q)
         critic_loss2 = self.mse_loss_func(q2, target_q)
