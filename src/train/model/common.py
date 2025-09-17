@@ -2,9 +2,8 @@ import torch.nn as nn
 from torch.nn.functional import one_hot
 import torch
 from torch import Tensor
-from game.constants import Team, BLACK
-from typing import List
 from collections import namedtuple
+from train.utils import tensor_check
 
 
 class SimpleConv(nn.Module):
@@ -45,8 +44,9 @@ class StateEncoder(nn.Module):
             nn.Flatten())
     
     def forward(self, board_state : Tensor) -> Tensor:
-        if not isinstance(board_state, torch.Tensor):
-            board_state = torch.tensor(board_state)
+        board_state = tensor_check(board_state)
+        if board_state.dim() == 3:
+            board_state = board_state.unsqueeze(0)
         return self.conv(board_state)
 
 
@@ -68,12 +68,14 @@ class Critic(nn.Module):
             nn.Linear(512, 1))
         
     
-    def forward(self, board_embs : Tensor, teams : Tensor, select : Tensor, target : Tensor, promote : Tensor):
+    def forward(self, embedding : Tensor, team : Tensor, select : Tensor, target : Tensor, promote : Tensor):
+        embedding, team, select, target, promote = map(tensor_check, [embedding, team, select, target, promote])
+
         one_hot_select = one_hot(select.reshape(-1).long(), 64)
         one_hot_target = one_hot(target.reshape(-1).long(), 64)
         one_hot_promote = torch.zeros((len(promote), 4)).long()
         one_hot_promote[promote.squeeze() != -1] = one_hot(promote[promote != -1], 4)
-        stacked = torch.hstack((board_embs, teams, one_hot_select, one_hot_target, one_hot_promote))
+        stacked = torch.hstack((embedding, team, one_hot_select, one_hot_target, one_hot_promote))
         return self.linear(stacked)
 
 
@@ -134,7 +136,7 @@ class Actor(nn.Module):
         select = select_distrs.argmax(axis=1, keepdim=True)
         logp = torch.log(select_distrs[torch.arange(len(select_distrs)), select])
 
-        return select, logp.mean()
+        return select, logp
     
     def get_target(self, projected, move_matrices, select):
         target_filter = move_matrices[torch.arange(len(select)), select.squeeze()]
@@ -143,31 +145,31 @@ class Actor(nn.Module):
         target = target_distrs.argmax(axis=1, keepdim=True)
         logp = torch.log(target_distrs[torch.arange(len(select)), target.squeeze()])
 
-        return target, logp.mean()
+        return target, logp
 
-    def get_promote(self, projected, select, target, maybe_promotes):
+    def get_promote(self, projected, move_matrices, select, target):
         # initialize to -1, representing no promotion, with 0 logp
         promote = -torch.ones(len(select)).reshape(-1, 1).long()
         promote_logp = torch.zeros(len(select)).reshape(-1, 1).float()
-        promote_filter = torch.tensor([
-            torch.eq(s, torch.tensor(maybe_promote)).any() 
-            for s, maybe_promote in zip(select, maybe_promotes)])
+        promote_filter = move_matrices[torch.arange(len(select)), select.squeeze(), target.squeeze()] == 2
 
         promote_distrs = self.promoter(
             torch.hstack((projected[promote_filter], one_hot(select[promote_filter].reshape(-1), 64), one_hot(target[promote_filter].reshape(-1), 64))))
         promote[promote_filter] = promote_distrs.argmax(axis=1, keepdim=True).long()
         promote_logp[promote_filter] = torch.log(torch.max(promote_distrs, axis=1, keepdim=True).values)
 
-        return promote, promote_logp.mean()
+        return promote, promote_logp
 
     
-    def forward(self, board_embs : Tensor, teams : Tensor, move_matrices : Tensor, maybe_promotes : Tensor):
-        stacked = torch.hstack((board_embs, teams))
+    def forward(self, embeddings : Tensor, teams : Tensor, move_matrices : Tensor):
+        embeddings, teams, move_matrices = map(tensor_check, [embeddings, teams, move_matrices])
+
+        stacked = torch.hstack((embeddings, teams))
         projected = self.body(stacked)
 
         select, select_logp = self.get_select(projected, move_matrices)
         target, target_logp = self.get_target(projected, move_matrices, select)
-        promote, promote_logp = self.get_promote(projected, select, target, maybe_promotes)
+        promote, promote_logp = self.get_promote(projected, move_matrices, select, target)
 
         return select, target, promote, select_logp + target_logp + promote_logp
 

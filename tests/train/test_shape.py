@@ -18,9 +18,9 @@ def test_board_encoder_shape():
     encoder = StateEncoder()
 
     state = board.get_state()
-    assert state.shape == (1, 16, 8, 8), f"board state incorrect shape, {state.shape} not (1, 16, 8, 8)"
+    shape_test(state.shape, (16, 8, 8))
     embedding = encoder(state)
-    assert embedding.shape == (1, 511), f"board state embedding incorrect shape, {embedding.shape} not (1, 511)"
+    shape_test(embedding.shape, (1, 511))
 
 
 def test_critic_shape():
@@ -59,11 +59,11 @@ def test_actor_shape():
     assert logp.ndim == 0, "logp not 0 dim"
 
     maybe_promotes = [[1, 2], [6], [], [34, 23, 21, 54]]
-    promote, logp = actor.get_promote(projected, select, target, maybe_promotes)
+    promote, logp = actor.get_promote(projected, dummy_move_matrices, select, target)
     shape_test(promote.shape, (4, 1))
     assert logp.ndim == 0, "logp not 0 dim"
     
-    select, target, promote, logp = actor(dummy_embeddings, teams, dummy_move_matrices, maybe_promotes)
+    select, target, promote, logp = actor(dummy_embeddings, teams, dummy_move_matrices)
     shape_test(select.shape, (4, 1))
     shape_test(target.shape, (4, 1))
     shape_test(promote.shape, (4, 1))
@@ -85,10 +85,9 @@ def test_actor_then_critic_shape():
 
     target, _ = actor.get_target(projected, dummy_move_matrices, select)
 
-    maybe_promotes = [[1, 2], [6], [], [34, 23, 21, 54]]
-    promote, _ = actor.get_promote(projected, select, target, maybe_promotes)
+    promote, _ = actor.get_promote(projected, dummy_move_matrices, select, target)
     
-    select, target, promote, _ = actor(dummy_embeddings, teams, dummy_move_matrices, maybe_promotes)
+    select, target, promote, _ = actor(dummy_embeddings, teams, dummy_move_matrices)
 
     values = critic(dummy_embeddings, teams, select, target, promote)
 

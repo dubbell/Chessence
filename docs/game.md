@@ -57,3 +57,4 @@ Returns:
 
 To do:
 - Also needs de-spaghettification.
+- Generate move matrix directly instead, of dict.
