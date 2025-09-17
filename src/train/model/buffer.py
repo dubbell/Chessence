@@ -12,8 +12,9 @@ batch_attributes = [
     "next_states", 
     "move_matrices",
     "next_move_matrices",
-    "selections", 
-    "targets", 
+    "select", 
+    "target", 
+    "promote",
     "rewards",
     "teams"]
 
@@ -32,11 +33,11 @@ class ReplayBuffer(Dataset):
         self.draw_penalty = draw_penalty
 
 
-    def insert(self, state, move_matrix, select, target, reward, team):
-        state, move_matrix, select, target, reward, team = \
-            map(tensor_check, [state, move_matrix, select, target, reward, team.value if isinstance(team, Team) else team])
+    def insert(self, state, move_matrix, select, target, promote, reward, team):
+        state, move_matrix, select, target, promote, reward, team = \
+            map(tensor_check, [state, move_matrix, select, target, promote, reward, team.value if isinstance(team, Team) else team])
 
-        self.buffer[self.current_idx] = [state, move_matrix, select, target, reward, team]
+        self.buffer[self.current_idx] = [state, move_matrix, select, target, promote, reward, team]
         self.current_idx = (self.current_idx + 1) % self.capacity
         self.length = min(self.capacity, self.length + 1)
     
@@ -46,14 +47,14 @@ class ReplayBuffer(Dataset):
         second = (self.current_idx - 1) % self.length
         # draw
         if move_result == DRAW:
-            self.buffer[first][4] = torch.tensor(self.draw_penalty)
-            self.buffer[second][4] = torch.tensor(self.draw_penalty)
+            self.buffer[first][5] = torch.tensor(self.draw_penalty)
+            self.buffer[second][5] = torch.tensor(self.draw_penalty)
         # loss
         else:
             # current player lost, and they made the move two moves ago, so that move is penalized
-            self.buffer[first][4] = torch.tensor(-1)
+            self.buffer[first][5] = torch.tensor(-1)
             # other player therefore won, so previous move is rewarded
-            self.buffer[second][4] = torch.tensor(1)
+            self.buffer[second][5] = torch.tensor(1)
     
     def __len__(self):
         return self.length

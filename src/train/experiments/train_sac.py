@@ -1,9 +1,10 @@
-from ..model.buffer import ReplayBuffer
 from game.move_calc import get_moves
-from game.model import Board, Move
+from game.model import Board, Move, Piece
 from game.constants import *
 from game.utils import other_team
-from ..model.sac import SAC
+
+from train.model.buffer import ReplayBuffer
+from train.model.sac import SAC
 from train.utils import DRAW, LOSS, CONTINUE, MoveResult
 
 import git
@@ -11,6 +12,7 @@ import numpy as np
 import mlflow
 from datetime import datetime
 from tqdm import tqdm
+from typing import Mapping, List
 
 import torch
 torch.autograd.set_detect_anomaly(True)
@@ -21,7 +23,7 @@ def will_be_promoted(team, rank):
     return team == WHITE and rank == 1 or team == BLACK and rank == 6
 
 
-def get_move_matrix(move_map):
+def get_move_matrix(move_map : Mapping[Piece, List[Move]]):
     """Simplified representation of all available moves. 
        Row = coordinate of piece that is being moved (select). 
        Col = coordinate that the selected piece can be moved to (target).
@@ -33,7 +35,7 @@ def get_move_matrix(move_map):
         for move in moves:
             available_target = np.ravel_multi_index(move.to_coord, (8, 8))
             move_matrix[available_select, available_target] = \
-                2 if piece.type == PAWN and will_be_promoted(piece.team, piece.coord[0]) else 1
+                2 if piece.piece_type == PAWN and will_be_promoted(piece.team, piece.coord[0]) else 1
 
     return move_matrix
 
@@ -55,7 +57,7 @@ def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
         return current_state, None, None, None, DRAW
 
     move_matrix = get_move_matrix(move_map)
-    action = agent.sample_action(current_state, move_matrix, team.value, eval=True)
+    action = agent.sample_actions(current_state, move_matrix, team.value, eval=True)
 
     select = np.concatenate(np.unravel_index(action[0], (8, 8)))
     target = np.concatenate(np.unravel_index(action[1], (8, 8)))

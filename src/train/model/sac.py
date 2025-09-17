@@ -7,7 +7,7 @@ from torch.optim import Adam
 from torch import nn
 from typing import Tuple, List
 from train.model.buffer import Batch
-from train.utils import tensor_check
+from train.utils import validate_tensors
 
 
 class AlphaLoss(nn.Module):
@@ -36,24 +36,29 @@ class SAC:
             obs_dim = 512,
             act_dim = 128,
             gamma = 0.99,
-            lr = 1e-4):
+            lr = 1e-4,
+            tau = 0.005):
         
         self.obs_dim = obs_dim
         self.act_dim = act_dim
         self.gamma = gamma
         self.lr = lr
+        self.tau = tau
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.encoder = StateEncoder().to(device=self.device)
         self.actor = Actor().to(device=self.device)
         self.critic = DoubleCritic().to(device=self.device)
+        self.target_critic = DoubleCritic().to(device=self.device)
 
-        self.log_alpha = torch.tensor(0.0, requires_grad = True)  # trainable entropy magnitude parameter
+        # trainable entropy magnitude parameter
+        self.log_alpha = nn.Parameter(torch.tensor(0.0))  
         self.target_entropy = -act_dim
 
-        params = list(self.encoder.parameters()) + list(self.actor.parameters()) + list(self.critic.parameters())
-        self.optimizer = Adam(params, lr = lr)
+        self.log_alpha_opt = Adam([self.log_alpha], lr = lr)
+        self.actor_opt = Adam(list(self.encoder.parameters()) + list(self.actor.parameters()), lr = lr)
+        self.critic_opt = Adam(list(self.encoder.parameters()) + list(self.critic.parameters()), lr = lr)
 
         self.alpha_loss_func = AlphaLoss()
         self.actor_loss_func = ActorLoss()
@@ -82,11 +87,11 @@ class SAC:
         self.critic.eval()
 
     
-    def sample_actions(self, board_state, move_matrices, team : Team, eval = False):
+    def sample_actions(self, board_states, move_matrices, teams, eval = False):
         """
         Sample one or more actions from agent.
 
-        board_state : Bx16x8x8 tensor (B = batch size)
+        board_states : Bx16x8x8 tensor (B = batch size)
         move_matrices : Bx64x64 tensor, 
         - row is selection position
         - col is target position
@@ -94,18 +99,21 @@ class SAC:
 
         Returns: select, target, promote, logp
         """
-        board_state, move_matrices, team = map(tensor_check, [board_state, move_matrices, team.value if isinstance(team, Team) else team])
-
+        board_states, move_matrices, teams = validate_tensors([board_states, move_matrices, [team.value if isinstance(team, Team) else team for team in teams]], [4, 3, 2])
+        
         if eval:
             self.eval()
         else:
             self.train()
 
-        embedding = self.encoder(board_state)
-        return self.actor(embedding, team, move_matrices)
+        embedding = self.encoder(board_states)
+        return self.actor(embedding, teams, move_matrices)
 
 
     def actor_alpha_train_step(self, batch : Batch):
+
+        self.log_alpha_opt.zero_grad()
+        self.actor_opt.zero_grad()
         
         embeddings = self.encoder(batch.states)
 
@@ -116,13 +124,15 @@ class SAC:
         alpha = torch.exp(self.log_alpha)
         alpha_loss = self.alpha_loss_func(alpha, logp.detach(), self.target_entropy)
         alpha_loss.backward()
-        alpha = alpha.detach()
 
         # train actor (critic parameters are detached)
         q1, q2 = self.critic.forward(embeddings, batch.teams, select, target, promote)
         sampled_q = torch.minimum(q1, q2).detach()
         actor_loss = self.actor_loss_func(alpha, logp, sampled_q)
         actor_loss.backward()
+
+        self.log_alpha_opt.step()
+        self.actor_opt.step()
 
         log_info = {
             "alpha_loss": alpha_loss.detach(),
@@ -135,6 +145,8 @@ class SAC:
     
     def critic_train_step(self, batch : Batch, alpha : Tensor):
 
+        self.critic_opt.zero_grad()
+
         # episode termination flag
         done = (batch.rewards != 0).int()
         
@@ -142,21 +154,28 @@ class SAC:
         next_embeddings = self.encoder(batch.next_states)
 
         # current q
-        q1, q2 = self.critic(embeddings, batch.teams, batch.selections.squeeze(), batch.targets.squeeze())
+        q1, q2 = self.critic(embeddings, batch.teams, batch.selections, batch.targets, batch.promote)
 
         next_select, next_target, next_promote, action_logp = self.actor.forward(next_embeddings, batch.next_move_matrices)
 
-        next_q1, next_q2 = self.critic.forward(next_embeddings, batch.teams, next_select.detach(), next_target.detach(), next_promote.detach())
-        next_q = torch.minimum(next_q1, next_q2) - alpha * action_logp.detach().reshape(-1, 1)
+        with torch.no_grad():
+            next_q1, next_q2 = self.target_critic.forward(next_embeddings, batch.teams, next_select, next_target, next_promote)
+            next_q = torch.minimum(next_q1, next_q2) - alpha * action_logp.reshape(-1, 1)
 
-        # target q, filtered by whether the next state is terminating
-        target_q = batch.rewards + self.gamma * (1 - done) * next_q.reshape(-1, 1)
+            # target q, filtered by whether the next state is terminating
+            target_q = batch.rewards + self.gamma * (1 - done) * next_q.reshape(-1, 1)
 
         critic_loss1 = self.mse_loss_func(q1, target_q)
         critic_loss2 = self.mse_loss_func(q2, target_q)
         critic_loss = (critic_loss1 + critic_loss2).mean()
 
         critic_loss.backward()
+
+        self.critic_opt.step()
+
+        # update target critic parameters
+        for param, target_param in zip(self.critic.parameters(), self.target_critic.parameters()):
+            target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
         log_info = {
             "critic_loss": critic_loss.detach(),
@@ -170,8 +189,6 @@ class SAC:
         self.train()
 
         self.optimizer.zero_grad()
-
-
 
         actor_log_info = self.actor_alpha_train_step(batch)
         critic_log_info = self.critic_train_step(batch, actor_log_info["alpha"])
