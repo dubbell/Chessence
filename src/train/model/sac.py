@@ -87,7 +87,7 @@ class SAC:
         self.critic.eval()
 
     
-    def sample_actions(self, board_states, move_matrices, teams, eval = False):
+    def sample_actions(self, board_states, move_matrices, teams, eval = False) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Sample one or more actions from agent.
 
@@ -99,7 +99,7 @@ class SAC:
 
         Returns: select, target, promote, logp
         """
-        board_states, move_matrices, teams = validate_tensors([board_states, move_matrices, [team.value if isinstance(team, Team) else team for team in teams]], [4, 3, 2])
+        board_states, move_matrices, teams = validate_tensors([board_states, move_matrices, teams], [4, 3, 2])
         
         if eval:
             self.eval()

@@ -5,7 +5,7 @@ from game.utils import other_team
 
 from train.model.buffer import ReplayBuffer
 from train.model.sac import SAC
-from train.utils import DRAW, LOSS, CONTINUE, MoveResult
+from train.utils import DRAW, LOSS, CONTINUE, to_ndim
 
 import git
 import numpy as np
@@ -59,11 +59,12 @@ def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
     move_matrix = get_move_matrix(move_map)
     action = agent.sample_actions(current_state, move_matrix, team.value, eval=True)
 
-    select = np.concatenate(np.unravel_index(action[0], (8, 8)))
-    target = np.concatenate(np.unravel_index(action[1], (8, 8)))
+    select = np.concatenate(np.unravel_index(to_ndim(action[0], 1), (8, 8)))
+    target = np.concatenate(np.unravel_index(to_ndim(action[1], 1), (8, 8)))
+    promote = action[2].squeeze()
 
     selected_piece = board.coord_map[*select]
-    en_passant = board.move_piece(selected_piece, Move(target))
+    en_passant = board.move_piece(selected_piece, Move(target), promote)
     
     next_state = board.get_state()
 

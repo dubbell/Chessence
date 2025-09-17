@@ -20,7 +20,7 @@ class Board:
     non_pawn_or_capture_moves = 0
     
     # map from coordinates to pieces
-    coord_map : Mapping[Tuple[int], Piece]
+    coord_map : Mapping[Tuple[int, int], Piece]
     
     # map from team and piece type to piece
     team_and_type_map : Mapping[Team, Mapping[PieceType, List[Piece]]]
@@ -96,7 +96,7 @@ class Board:
         return True
     
 
-    def move_piece(self, piece : Piece, move : Move):
+    def move_piece(self, piece : Piece, move : Move, promote : int = -1):
         if piece.piece_type == PAWN and piece.team == BLACK and piece.coord[0] == 1 and move.to_coord[0] == 3 or \
                 piece.piece_type == PAWN and piece.team == WHITE and piece.coord[0] == 6 and move.to_coord[0] == 4:
             en_passant = move.to_coord
@@ -112,6 +112,14 @@ class Board:
         self.coord_map.pop(tuple(piece.coord))
         self.coord_map[*move.to_coord] = piece
         piece.coord = move.to_coord
+
+        # promote pawn
+        promotions = [QUEEN, ROOK, BISHOP, KNIGHT]
+        if promote != -1 and piece.piece_type == PAWN:
+            promotion = promotions[promote]
+            self.team_and_type_map[piece.team][PAWN].remove(piece)
+            self.team_and_type_map[piece.team][promotion].append(piece)
+            piece.piece_type = promotion
 
         return en_passant
 
@@ -130,6 +138,7 @@ class Board:
             if len(cached_pieces) != len(self.pieces):
                 continue
             
+            # if the same position is found twice in cache, then the same position was reached 3 times in total, thus threefold repetition
             if np.all([cached_piece == current_piece for cached_piece, current_piece in zip(cached_pieces, self.pieces)]):
                 count += 1
                 if count >= 2:
