@@ -21,13 +21,22 @@ def get_move_matrix(move_map):
        Col = coordinate that the selected piece can be moved to (target)."""
     
     move_matrix = np.zeros((64, 64), dtype=bool)
+    maybe_promote = []  # potential pawns that can be promoted, stored as selection integer
     for piece, moves in move_map.items():
         available_select = np.ravel_multi_index(piece.coord, (8, 8))
         for move in moves:
             available_target = np.ravel_multi_index(move.to_coord, (8, 8))
             move_matrix[available_select, available_target] = True
+        
+        # if its a pawn that would be promoted if moved
+        if len(moves) > 0 and piece.piece_type == PAWN and (
+                piece.team == WHITE and piece.coord[0] == 1 or 
+                piece.team == BLACK and piece.coord[0] == 6):
+
+            maybe_promote.append(available_select)
+
     
-    return move_matrix
+    return move_matrix, maybe_promote
 
 
 def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
@@ -46,7 +55,7 @@ def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
     elif not move_map:
         return current_state, None, None, None, DRAW
 
-    move_matrix = get_move_matrix(move_map)
+    move_matrix, promote = get_move_matrix(move_map)
     action = agent.sample_action(current_state, move_matrix, team.value, eval=True)
 
     select = np.concatenate(np.unravel_index(action[0], (8, 8)))

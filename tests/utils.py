@@ -1,5 +1,6 @@
 import numpy as np
 from typing import List
+import torch
 
 
 def contains_exactly(iter1, iter2):
@@ -27,3 +28,14 @@ def contains_exactly(iter1, iter2):
     for index in range(len(iter2)):
         if used_indices[index] == 0:
             raise AssertionError(f"{iter2[index]} in second iterable not in first.")
+
+
+
+def get_dummy_board_states(n):
+    return torch.zeros((n, 16, 8, 8)).float()
+
+def get_dummy_move_matrices(n):
+    return torch.zeros((n, 64, 64)).float()
+
+def get_dummy_state_embeddings(n):
+    return torch.zeros((n, 511)).float()

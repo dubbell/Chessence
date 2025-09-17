@@ -5,7 +5,7 @@ import torch
 from torch import Tensor
 from torch.optim import Adam
 from torch import nn
-from typing import Tuple
+from typing import Tuple, List
 from train.model.buffer import Batch
 from train.utils import tensor_check
 
@@ -82,7 +82,7 @@ class SAC:
         self.critic.eval()
     
     
-    def get_action_samples(self, select_distrs : Tensor, target_distrs : Tensor, move_matrices : Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def get_action_samples(self, select_distrs : Tensor, target_distrs : Tensor, promote_distr : Tensor, move_matrices : Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """Get sampled action given select and target distributions, along with the available moves in a 64x64 move matrix.
            Returns selected square, target square, and log likelihood of the total action."""
         select_distrs, target_distrs, move_matrices = map(tensor_check, [select_distrs, target_distrs, move_matrices])
@@ -95,14 +95,17 @@ class SAC:
         filtered_target_distrs = target_filter * target_distrs
         target = filtered_target_distrs.argmax(axis=1)
 
+        promote = promote_distr.argmax(axis=1)
+
         # log probability after normalizing probabilities to account for filtering
         select_logp = torch.log(filtered_select_distrs[np.arange(len(select_distrs)), select] / filtered_select_distrs.sum())
         target_logp = torch.log(filtered_target_distrs[np.arange(len(target_distrs)), target] / filtered_target_distrs.sum())
+        promote_logp = torch.log(promote_distr[np.arange(len(promote_distr)), promote])
 
         return select, target, select_logp + target_logp
 
     
-    def sample_action(self, board_state, move_matrix, team : Team, eval = False):
+    def sample_action(self, board_state, move_matrix, maybe_promote, team : Team, eval = False):
         """
         Sample single action.
 
@@ -112,7 +115,7 @@ class SAC:
         - col is target position
         - [row, col] determines if generated move is valid
         """
-        board_state, move_matrix, team = map(tensor_check, [board_state, move_matrix, team.value if isinstance(team, Team) else team])
+        board_state, move_matrix, maybe_promote, team = map(tensor_check, [board_state, move_matrix, maybe_promote, team.value if isinstance(team, Team) else team])
 
         if eval:
             self.eval()
@@ -120,7 +123,7 @@ class SAC:
             self.train()
 
         embedding = self.encoder(board_state.reshape(1, 16, 8, 8))
-        select_distr, target_distr = self.actor(embedding, team.reshape(-1, 1))
+        select_distr, target_distr, promote_distr = self.actor(embedding, team.reshape(-1, 1))
 
         select, target, _ = self.get_action_samples(select_distr.reshape(1, 64), target_distr.reshape(1, 64), move_matrix.reshape(1, 64, 64))
 

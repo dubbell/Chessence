@@ -1,8 +1,10 @@
 import torch.nn as nn
+from torch.nn.functional import one_hot
 import torch
 from torch import Tensor
 from game.constants import Team, BLACK
 from typing import List
+from collections import namedtuple
 
 
 class SimpleConv(nn.Module):
@@ -55,7 +57,7 @@ class Critic(nn.Module):
         super().__init__()
 
         self.linear = nn.Sequential(
-            nn.Linear(640, 512), 
+            nn.Linear(644, 512), 
             nn.Dropout(p=0.2),
             nn.BatchNorm1d(512),
             nn.ReLU(),
@@ -66,10 +68,12 @@ class Critic(nn.Module):
             nn.Linear(512, 1))
         
     
-    def forward(self, board_embs : Tensor, teams : Tensor, selections : Tensor, targets : Tensor):
-        one_hot_select = nn.functional.one_hot(selections, 64)
-        one_hot_target = nn.functional.one_hot(targets, 64)
-        stacked = torch.hstack((board_embs, teams, one_hot_select, one_hot_target))
+    def forward(self, board_embs : Tensor, teams : Tensor, select : Tensor, target : Tensor, promote : Tensor):
+        one_hot_select = one_hot(select.reshape(-1).long(), 64)
+        one_hot_target = one_hot(target.reshape(-1).long(), 64)
+        one_hot_promote = torch.zeros((len(promote), 4)).long()
+        one_hot_promote[promote.squeeze() != -1] = one_hot(promote[promote != -1], 4)
+        stacked = torch.hstack((board_embs, teams, one_hot_select, one_hot_target, one_hot_promote))
         return self.linear(stacked)
 
 
@@ -82,10 +86,13 @@ class DoubleCritic(nn.Module):
         self.critic1 = Critic()
         self.critic2 = Critic()
 
-    def forward(self, board_embs : Tensor, teams : Tensor, selections : Tensor, targets : Tensor):
-        return self.critic1(board_embs, teams, selections, targets), self.critic2(board_embs, teams, selections, targets)
+    def forward(self, board_embs : Tensor, teams : Tensor, select : Tensor, target : Tensor, promote : Tensor):
+        return self.critic1(board_embs, teams, select, target, promote), self.critic2(board_embs, teams, select, target, promote)
         
-        
+
+
+Action = namedtuple("Action", ["select", "target", "promote", "logp"])
+
 
 class Actor(nn.Module):
 
@@ -100,19 +107,71 @@ class Actor(nn.Module):
             nn.Linear(512, 512), 
             nn.Dropout(p=0.2),
             nn.BatchNorm1d(512),
-            nn.ReLU(),
-            nn.Linear(512, 512))
+            nn.ReLU())
 
         self.selector = nn.Sequential(
-            nn.Linear(512, 64),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, 64), 
             nn.Softmax(1))
         
         self.targeter = nn.Sequential(
-            nn.Linear(512, 64),
+            nn.Linear(576, 512),
+            nn.ReLU(),
+            nn.Linear(512, 64), 
+            nn.Softmax(1))
+        
+        self.promoter = nn.Sequential(
+            nn.Linear(640, 512),
+            nn.ReLU(),
+            nn.Linear(512, 4), 
             nn.Softmax(1))
     
-    def forward(self, board_embs : Tensor, teams : Tensor):
+    def get_select(self, projected, move_matrices):
+        select_filter = move_matrices.any(axis=2)
+        select_distrs = select_filter * self.selector(projected)
+        select_distrs /= torch.sum(select_distrs, dim=1, keepdim=True)
+        select = select_distrs.argmax(axis=1, keepdim=True)
+        logp = torch.log(select_distrs[torch.arange(len(select_distrs)), select])
+
+        return select, logp.mean()
+    
+    def get_target(self, projected, move_matrices, select):
+        target_filter = move_matrices[torch.arange(len(select)), select.squeeze()]
+        target_distrs = target_filter * self.targeter(torch.hstack((projected, one_hot(select.reshape(-1), 64))))
+        target_distrs /= torch.sum(target_distrs, axis=1, keepdim=True)
+        target = target_distrs.argmax(axis=1, keepdim=True)
+        logp = torch.log(target_distrs[torch.arange(len(select)), target.squeeze()])
+
+        return target, logp.mean()
+
+    def get_promote(self, projected, select, target, maybe_promotes):
+        # initialize to -1, representing no promotion, with 0 logp
+        promote = -torch.ones(len(select)).reshape(-1, 1).long()
+        promote_logp = torch.zeros(len(select)).reshape(-1, 1).float()
+        promote_filter = torch.tensor([
+            torch.eq(s, torch.tensor(maybe_promote)).any() 
+            for s, maybe_promote in zip(select, maybe_promotes)])
+
+        promote_distrs = self.promoter(
+            torch.hstack((projected[promote_filter], one_hot(select[promote_filter].reshape(-1), 64), one_hot(target[promote_filter].reshape(-1), 64))))
+        promote[promote_filter] = promote_distrs.argmax(axis=1, keepdim=True).long()
+        promote_logp[promote_filter] = torch.log(torch.max(promote_distrs, axis=1, keepdim=True).values)
+
+        return promote, promote_logp.mean()
+
+    
+    def forward(self, board_embs : Tensor, teams : Tensor, move_matrices : Tensor, maybe_promotes : Tensor):
         stacked = torch.hstack((board_embs, teams))
         projected = self.body(stacked)
 
-        return self.selector(projected), self.targeter(projected)
+        select, select_logp = self.get_select(projected, move_matrices)
+        target, target_logp = self.get_target(projected, move_matrices, select)
+        promote, promote_logp = self.get_promote(projected, select, target, maybe_promotes)
+
+        return select, target, promote, select_logp + target_logp + promote_logp
+
+        
+
+
+
