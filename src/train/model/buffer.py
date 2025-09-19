@@ -63,10 +63,10 @@ class ReplayBuffer(Dataset):
         """Sampled tuple."""
         idx = idx % self.length
 
-        state, move_matrix, select, target, reward, team = self.buffer[idx]
+        state, move_matrix, select, target, promote, reward, team = self.buffer[idx]
         next_state, next_move_matrix = self.buffer[(idx+2) % self.length][:2]
             
-        return state, next_state, move_matrix, next_move_matrix, select, target, reward, team
+        return state, next_state, move_matrix, next_move_matrix, select, target, promote, reward, team
 
 
     def to_tensor(self, tuple):

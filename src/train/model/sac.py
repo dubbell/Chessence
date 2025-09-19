@@ -10,6 +10,8 @@ from train.model.buffer import Batch
 from train.utils import validate_tensors
 
 
+torch.autograd.set_detect_anomaly(True)
+
 class AlphaLoss(nn.Module):
     def __init__(self):
         super(AlphaLoss, self).__init__()
@@ -123,13 +125,14 @@ class SAC:
         # train alpha parameter
         alpha = torch.exp(self.log_alpha)
         alpha_loss = self.alpha_loss_func(alpha, logp.detach(), self.target_entropy)
-        alpha_loss.backward()
 
         # train actor (critic parameters are detached)
         q1, q2 = self.critic.forward(embeddings, batch.teams, select, target, promote)
-        sampled_q = torch.minimum(q1, q2).detach()
-        actor_loss = self.actor_loss_func(alpha, logp, sampled_q)
-        actor_loss.backward()
+        sampled_q = torch.minimum(q1, q2)
+        actor_loss = self.actor_loss_func(alpha.detach(), logp, sampled_q.detach())
+
+        total_loss = alpha_loss + actor_loss
+        total_loss.backward()
 
         self.log_alpha_opt.step()
         self.actor_opt.step()
@@ -188,12 +191,8 @@ class SAC:
     def train_step(self, batch : Batch):
         self.train()
 
-        self.optimizer.zero_grad()
-
         actor_log_info = self.actor_alpha_train_step(batch)
         critic_log_info = self.critic_train_step(batch, actor_log_info["alpha"])
-
-        self.optimizer.step()
 
         log_info = { **actor_log_info, **critic_log_info }
 

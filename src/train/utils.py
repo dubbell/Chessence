@@ -50,5 +50,3 @@ def validate_tensors(data, desired_dims = None):
 
     mapped = [to_ndim(tensor_check(x), desired_dim) for x, desired_dim in zip(data, desired_dims)]
     return mapped if len(mapped) > 1 else mapped[0]
-        
-

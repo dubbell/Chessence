@@ -57,7 +57,7 @@ def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
         return current_state, None, None, None, DRAW
 
     move_matrix = get_move_matrix(move_map)
-    action = agent.sample_actions(current_state, move_matrix, team.value, eval=True)
+    action = agent.sample_actions(current_state, move_matrix, team.value, eval=True)[:3]  # ignore logp
 
     select = np.concatenate(np.unravel_index(to_ndim(action[0], 1), (8, 8)))
     target = np.concatenate(np.unravel_index(to_ndim(action[1], 1), (8, 8)))
@@ -114,12 +114,12 @@ def start_training(config):
     
     while step < config["max_timesteps"] or not first_step:
 
-        # TRAINING AT SET INTERVALS
+        # AGENT OPTIMIZATION AT SET INTERVALS
         if step >= config["train_start"] and step % config["train_interval"] == 0:
             train_agent.train_step(replay_buffer.sample_batch())
 
-        # UPDATE FIXED AGENT
-        if step % config["update_interval"]:
+        # UPDATE FIXED AGENT AT SET INTERVALS
+        if step % config["update_interval"] == 0:
             fixed_agent.load_state_dict(train_agent.state_dict())
 
         # TAKE ENVIRONMENT STEP
@@ -154,8 +154,8 @@ def start_training(config):
 
             continue
 
+        # PREPARE FOR NEXT ITERATION
         state = next_state
-        
         current_team = other_team(current_team)
         first_step = False
     

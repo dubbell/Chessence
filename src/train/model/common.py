@@ -1,5 +1,5 @@
 import torch.nn as nn
-from torch.nn.functional import one_hot
+import torch.nn.functional as F
 import torch
 from torch import Tensor
 from collections import namedtuple
@@ -68,15 +68,21 @@ class Critic(nn.Module):
             nn.Linear(512, 1))
         
     
-    def forward(self, embedding : Tensor, team : Tensor, select : Tensor, target : Tensor, promote : Tensor):
-        embedding, team, select, target, promote = map(tensor_check, [embedding, team, select, target, promote])
+    def forward(self, embeddings : Tensor, teams : Tensor, select : Tensor, target : Tensor, promote : Tensor):
+        embeddings, teams, select, target, promote = map(tensor_check, [embeddings, teams, select, target, promote])
 
-        one_hot_select = one_hot(select.reshape(-1).long(), 64)
-        one_hot_target = one_hot(target.reshape(-1).long(), 64)
-        one_hot_promote = torch.zeros((len(promote), 4)).long()
-        one_hot_promote[promote.squeeze() != -1] = one_hot(promote[promote != -1], 4)
-        stacked = torch.hstack((embedding, team, one_hot_select, one_hot_target, one_hot_promote))
-        return self.linear(stacked)
+        assert embeddings.shape[1:] == (511,), embeddings.shape
+        assert teams.dim() == 1, teams.shape
+        assert select.dim() == 1, select.shape
+        assert target.dim() == 1, target.shape
+        assert promote.dim() == 1, promote.shape
+
+        one_hot_select = F.one_hot(select, 64)
+        one_hot_target = F.one_hot(target, 64)
+        one_hot_promote = torch.zeros((promote.shape[0], 4)).long()
+        one_hot_promote[promote != -1] = F.one_hot(promote[promote != -1], 4)
+        stacked = torch.hstack((embeddings, teams.reshape((-1, 1)), one_hot_select, one_hot_target, one_hot_promote))
+        return self.linear(stacked).reshape(-1)
 
 
 class DoubleCritic(nn.Module):
@@ -114,57 +120,68 @@ class Actor(nn.Module):
         self.selector = nn.Sequential(
             nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Linear(512, 64), 
-            nn.Softmax(1))
+            nn.Linear(512, 64))
         
         self.targeter = nn.Sequential(
             nn.Linear(576, 512),
             nn.ReLU(),
-            nn.Linear(512, 64), 
-            nn.Softmax(1))
+            nn.Linear(512, 64))
         
         self.promoter = nn.Sequential(
             nn.Linear(640, 512),
             nn.ReLU(),
-            nn.Linear(512, 4), 
-            nn.Softmax(1))
+            nn.Linear(512, 4))
     
     def get_select(self, projected, move_matrices):
-        select_filter = move_matrices.any(axis=2)
-        select_distrs = select_filter * self.selector(projected)
-        select_distrs /= torch.sum(select_distrs, dim=1, keepdim=True)
-        select = select_distrs.argmax(axis=1, keepdim=True)
-        logp = torch.log(select_distrs[torch.arange(len(select_distrs)), select])
+        assert projected.shape[1:] == (512,), projected.shape
+        assert move_matrices.shape[1:] == (64, 64), move_matrices.shape
 
-        return select, logp
+        select_filter = move_matrices.any(axis=2)
+        select_logits = self.selector(projected)
+        select_logits.masked_fill_(~select_filter, float('-inf'))
+        select = select_logits.argmax(axis=1)
+        logp = F.log_softmax(select_logits, dim=1)[torch.arange(select.shape[0]), select]
+
+        return select.long(), logp
     
     def get_target(self, projected, move_matrices, select):
-        target_filter = move_matrices[torch.arange(len(select)), select.squeeze()]
-        target_distrs = target_filter * self.targeter(torch.hstack((projected, one_hot(select.reshape(-1), 64))))
-        target_distrs /= torch.sum(target_distrs, axis=1, keepdim=True)
-        target = target_distrs.argmax(axis=1, keepdim=True)
-        logp = torch.log(target_distrs[torch.arange(len(select)), target.squeeze()])
+        assert projected.shape[1:] == (512,), projected.shape
+        assert move_matrices.shape[1:] == (64, 64), move_matrices.shape
+        assert select.dim() == 1, select.shape
 
-        return target, logp
+        target_filter = move_matrices[torch.arange(select.shape[0]), select] > 0
+        target_logits = self.targeter(torch.hstack((projected, F.one_hot(select, 64))))
+        target_logits.masked_fill_(~target_filter, float('-inf'))
+        target = target_logits.argmax(axis=1)
+        logp = F.log_softmax(target_logits, dim=1)[torch.arange(target.shape[0]), target]
+
+        return target.long(), logp
 
     def get_promote(self, projected, move_matrices, select, target):
-        # initialize to -1, representing no promotion, with 0 logp
-        promote = -torch.ones(len(select)).reshape(-1, 1).long()
-        promote_logp = torch.zeros(len(select)).reshape(-1, 1).float()
-        promote_filter = move_matrices[torch.arange(len(select)), select.squeeze(), target.squeeze()] == 2
+        assert projected.shape[1:] == (512,), projected.shape
+        assert move_matrices.shape[1:] == (64, 64), move_matrices.shape
+        assert select.dim() == 1, select.shape
+        assert target.dim() == 1, target.shape
+               
+        promote_filter = move_matrices[torch.arange(select.shape[0]), select, target] == 2
+        promote_logits = self.promoter(torch.hstack((projected, F.one_hot(select, 64), F.one_hot(target, 64))))
+        promote = promote_logits.argmax(axis=1).long()
+        promote_logp = torch.log_softmax(promote_logits, dim=1)[torch.arange(promote.shape[0]), promote]
 
-        promote_distrs = self.promoter(
-            torch.hstack((projected[promote_filter], one_hot(select[promote_filter].reshape(-1), 64), one_hot(target[promote_filter].reshape(-1), 64))))
-        promote[promote_filter] = promote_distrs.argmax(axis=1, keepdim=True).long()
-        promote_logp[promote_filter] = torch.log(torch.max(promote_distrs, axis=1, keepdim=True).values)
+        promote.masked_fill_(~promote_filter, -1)
+        promote_logp.masked_fill_(~promote_filter, 0)
 
-        return promote, promote_logp
+        return promote.long(), promote_logp
 
     
     def forward(self, embeddings : Tensor, teams : Tensor, move_matrices : Tensor):
         embeddings, teams, move_matrices = map(tensor_check, [embeddings, teams, move_matrices])
 
-        stacked = torch.hstack((embeddings, teams))
+        assert embeddings.shape[1:] == (511,), embeddings.shape
+        assert teams.dim() == 1, teams.shape
+        assert move_matrices.shape[1:] == (64, 64), move_matrices.shape
+
+        stacked = torch.hstack((embeddings, teams.reshape((-1, 1))))
         projected = self.body(stacked)
 
         select, select_logp = self.get_select(projected, move_matrices)
