@@ -57,7 +57,7 @@ def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
         return current_state, None, None, None, DRAW
 
     move_matrix = get_move_matrix(move_map)
-    action = agent.sample_actions(current_state, move_matrix, team.value, eval=True)[:3]  # ignore logp
+    action = agent.sample_actions(current_state, move_matrix, team.value)[:3]  # ignore logp
 
     select = np.concatenate(np.unravel_index(action[0], (8, 8)))
     target = np.concatenate(np.unravel_index(action[1], (8, 8)))
@@ -110,6 +110,8 @@ def start_training(config):
             **config})
         
     pb = tqdm(total = config["total_games"])
+
+    train_loss_count, train_win_count = 0, 0
     
     while game_count < config["total_games"]:
         # AGENT OPTIMIZATION
@@ -118,13 +120,15 @@ def start_training(config):
             train_steps_remaining -= 1
 
         # UPDATE FIXED AGENT AT SET INTERVALS
-        if first_step and game_count % config["update_interval"] == 0 and game_count >= config["train_start"]:
+        if first_step and (game_count - config["train_start"]) % config["update_interval"] == 0 and game_count >= config["train_start"]:
             fixed_agent.load_state_dict(train_agent.state_dict())
+            train_loss_count, train_win_count = 0, 0
 
         # TAKE ENVIRONMENT STEP
+        current_agent = white_agent if current_team == WHITE else black_agent
         next_state, move_matrix, action, en_passant, move_result = \
-            take_action(board, white_agent if current_team == WHITE else black_agent, current_team, en_passant)
-        
+            take_action(board, current_agent, current_team, en_passant)
+
         # REPLAY BUFFER INSERTION
         if move_result == CONTINUE:
             replay_buffer.insert(state, move_matrix, *action, 0, current_team.value)
@@ -139,15 +143,17 @@ def start_training(config):
             state = board.get_state()
             white_agent, black_agent = black_agent, white_agent
             current_team = WHITE
-
-            if config["enable_logging"]:
-                is_white = train_agent == white_agent  # if train_agent is white
-                mlflow.log_metric(
-                    "white_win" if is_white else "black_win",
-                    int(is_white != (current_team == WHITE)))
-
+            
             game_count += 1
             pb.update()
+
+            if config["enable_logging"] and game_count >= config["train_start"]:
+                if current_agent == train_agent:
+                    train_loss_count += 1
+                    mlflow.log_metric("loss", train_loss_count, step = game_count - config["train_start"])
+                else:
+                    train_win_count += 1
+                    mlflow.log_metric("win", train_win_count, step = game_count - config["train_start"])
 
             if game_count >= config["train_start"]:
                 train_steps_remaining += config["train_steps_per_game"]

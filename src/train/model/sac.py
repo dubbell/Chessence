@@ -38,7 +38,7 @@ class SAC:
             obs_dim = 512,
             act_dim = 128,
             gamma = 0.99,
-            lr = 1e-4,
+            lr = 3e-4,
             tau = 0.005):
         
         self.obs_dim = obs_dim
