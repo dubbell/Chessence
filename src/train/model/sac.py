@@ -101,7 +101,7 @@ class SAC:
 
         Returns: select, target, promote, logp
         """
-        board_states, move_matrices, teams = validate_tensors([board_states, move_matrices, teams], [4, 3, 2])
+        board_states, move_matrices, teams = validate_tensors([board_states, move_matrices, teams], [4, 3, 1])
         
         if eval:
             self.eval()
@@ -113,7 +113,6 @@ class SAC:
 
 
     def actor_alpha_train_step(self, batch : Batch):
-
         self.log_alpha_opt.zero_grad()
         self.actor_opt.zero_grad()
         
@@ -147,26 +146,25 @@ class SAC:
         return log_info
     
     def critic_train_step(self, batch : Batch, alpha : Tensor):
-
         self.critic_opt.zero_grad()
 
         # episode termination flag
-        done = (batch.rewards != 0).int()
+        done = batch.rewards != 0
         
         embeddings = self.encoder(batch.states)
         next_embeddings = self.encoder(batch.next_states)
 
         # current q
-        q1, q2 = self.critic(embeddings, batch.teams, batch.selections, batch.targets, batch.promote)
+        q1, q2 = self.critic(embeddings, batch.teams, batch.select, batch.target, batch.promote)
 
-        next_select, next_target, next_promote, action_logp = self.actor.forward(next_embeddings, batch.next_move_matrices)
+        next_select, next_target, next_promote, action_logp = self.actor.forward(next_embeddings, batch.teams, batch.next_move_matrices)
 
         with torch.no_grad():
             next_q1, next_q2 = self.target_critic.forward(next_embeddings, batch.teams, next_select, next_target, next_promote)
-            next_q = torch.minimum(next_q1, next_q2) - alpha * action_logp.reshape(-1, 1)
+            next_q = torch.minimum(next_q1, next_q2) - alpha * action_logp
 
             # target q, filtered by whether the next state is terminating
-            target_q = batch.rewards + self.gamma * (1 - done) * next_q.reshape(-1, 1)
+            target_q = batch.rewards + self.gamma * ~done * next_q
 
         critic_loss1 = self.mse_loss_func(q1, target_q)
         critic_loss2 = self.mse_loss_func(q2, target_q)

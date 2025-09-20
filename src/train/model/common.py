@@ -166,9 +166,8 @@ class Actor(nn.Module):
         promote_filter = move_matrices[torch.arange(select.shape[0]), select, target] == 2
         promote_logits = self.promoter(torch.hstack((projected, F.one_hot(select, 64), F.one_hot(target, 64))))
         promote = promote_logits.argmax(axis=1).long()
-        promote_logp = torch.log_softmax(promote_logits, dim=1)[torch.arange(promote.shape[0]), promote]
-
         promote.masked_fill_(~promote_filter, -1)
+        promote_logp = torch.log_softmax(promote_logits, dim=1)[torch.arange(promote.shape[0]), promote]
         promote_logp.masked_fill_(~promote_filter, 0)
 
         return promote.long(), promote_logp

@@ -35,7 +35,7 @@ class ReplayBuffer(Dataset):
 
     def insert(self, state, move_matrix, select, target, promote, reward, team):
         state, move_matrix, select, target, promote, reward, team = \
-            map(tensor_check, [state, move_matrix, select, target, promote, reward, team.value if isinstance(team, Team) else team])
+            map(tensor_check, [state, move_matrix, select, target, promote, reward, team])
 
         self.buffer[self.current_idx] = [state, move_matrix, select, target, promote, reward, team]
         self.current_idx = (self.current_idx + 1) % self.capacity
@@ -69,17 +69,14 @@ class ReplayBuffer(Dataset):
         return state, next_state, move_matrix, next_move_matrix, select, target, promote, reward, team
 
 
-    def to_tensor(self, tuple):
-        tensor = torch.stack(tuple).to(device=self.device)
-        if tensor.ndim == 1:
-            tensor = tensor.reshape(-1, 1)
-        return tensor
-    
+    def stack_tensor(self, values):
+        return torch.stack(values).squeeze().to(device=self.device)
+
     def sample_batch(self) -> Batch:
         idxs = np.random.choice(np.arange(self.length - 1), size = self.batch_size, replace = False)
         # list of tuples (state, next_state, move_matrix, ...)
         samples = [self.__getitem__(idx) for idx in idxs]
         # unzip and convert to tensors (states, next_states, move_matrices, ...)
-        tensors = map(self.to_tensor, zip(*samples))
+        tensors = map(self.stack_tensor, zip(*samples))
         
         return Batch(*tensors)

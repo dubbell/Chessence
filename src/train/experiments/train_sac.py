@@ -59,9 +59,9 @@ def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
     move_matrix = get_move_matrix(move_map)
     action = agent.sample_actions(current_state, move_matrix, team.value, eval=True)[:3]  # ignore logp
 
-    select = np.concatenate(np.unravel_index(to_ndim(action[0], 1), (8, 8)))
-    target = np.concatenate(np.unravel_index(to_ndim(action[1], 1), (8, 8)))
-    promote = action[2].squeeze()
+    select = np.concatenate(np.unravel_index(action[0], (8, 8)))
+    target = np.concatenate(np.unravel_index(action[1], (8, 8)))
+    promote = action[2]
 
     selected_piece = board.coord_map[*select]
     en_passant = board.move_piece(selected_piece, Move(target), promote)
@@ -131,7 +131,7 @@ def start_training(config):
 
         # REPLAY BUFFER INSERTION
         if move_result == CONTINUE:
-            replay_buffer.insert(state, move_matrix, *action, 0, current_team)
+            replay_buffer.insert(state, move_matrix, *action, 0, current_team.value)
         else: 
             # if the game has ended, i.e. player had no moves available,
             # set rewards for previous moves
