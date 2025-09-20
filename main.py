@@ -21,11 +21,13 @@ def get_config():
 # required entries in configuration file
 REQ_CONFIG = [
     "algorithm", 
-    "max_timesteps", 
+    "total_games", 
     "checkpoint", 
     "train_start", 
-    "train_interval", 
-    "update_interval"
+    "train_steps_per_game", 
+    "update_interval",
+    "enable_logging",
+    "batch_size"
 ]
 
 def main():

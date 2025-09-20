@@ -1,8 +1,8 @@
 algorithm: SAC
-max_timesteps: 1000000
+total_games: 20000
 checkpoint: false
-train_start: 10000
-train_interval: 1000
-update_interval: 100000
+train_start: 100
+train_steps_per_game: 1
+update_interval: 100
 enable_logging: True
 batch_size: 128

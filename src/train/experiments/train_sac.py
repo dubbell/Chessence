@@ -94,10 +94,9 @@ def start_training(config):
     train_agent, fixed_agent = SAC(), SAC()
     white_agent, black_agent = train_agent, fixed_agent
 
-    current_team = WHITE
-
-    step = 0
+    train_steps_remaining = 0
     game_count = 0
+    current_team = WHITE
 
     # ensures that the black state transition is not added after first move
     # and so that the final game runs to completion
@@ -110,25 +109,22 @@ def start_training(config):
             "commit": get_latest_commit_hash(),
             **config})
         
-    pb = tqdm(total = config["max_timesteps"])
+    pb = tqdm(total = config["total_games"])
     
-    while step < config["max_timesteps"] or not first_step:
-
-        # AGENT OPTIMIZATION AT SET INTERVALS
-        if step >= config["train_start"] and step % config["train_interval"] == 0:
+    while game_count < config["total_games"]:
+        # AGENT OPTIMIZATION
+        while train_steps_remaining >= 1:
             train_agent.train_step(replay_buffer.sample_batch())
+            train_steps_remaining -= 1
 
         # UPDATE FIXED AGENT AT SET INTERVALS
-        if step % config["update_interval"] == 0:
+        if first_step and game_count % config["update_interval"] == 0 and game_count >= config["train_start"]:
             fixed_agent.load_state_dict(train_agent.state_dict())
 
         # TAKE ENVIRONMENT STEP
         next_state, move_matrix, action, en_passant, move_result = \
             take_action(board, white_agent if current_team == WHITE else black_agent, current_team, en_passant)
         
-        step += 1
-        pb.update()
-
         # REPLAY BUFFER INSERTION
         if move_result == CONTINUE:
             replay_buffer.insert(state, move_matrix, *action, 0, current_team.value)
@@ -151,6 +147,10 @@ def start_training(config):
                     int(is_white != (current_team == WHITE)))
 
             game_count += 1
+            pb.update()
+
+            if game_count >= config["train_start"]:
+                train_steps_remaining += config["train_steps_per_game"]
 
             continue
 
