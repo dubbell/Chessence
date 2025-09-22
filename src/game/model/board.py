@@ -25,15 +25,22 @@ class Board:
     # map from team and piece type to piece
     team_and_type_map : Mapping[Team, Mapping[PieceType, List[Piece]]]
 
+    # castling rights
+    king_side_castle : Mapping[Team, bool]
+    queen_side_castle : Mapping[Team, bool]
+
 
     def __init__(self):
         self.pieces = []
         self.cache = []
+        self.king_side_castle = { WHITE : True, BLACK : True }
+        self.queen_side_castle = { WHITE : True, BLACK : True }
         self.coord_map = {}
         self.team_and_type_map = \
             { team : { piece_type : [] 
                        for piece_type in [KING, QUEEN, ROOK, BISHOP, KNIGHT, PAWN] } 
               for team in [WHITE, BLACK] }
+        
 
     def __repr__(self):
         board = np.array([["  " for _ in range(8)] for _ in range(8)])
