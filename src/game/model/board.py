@@ -29,12 +29,15 @@ class Board:
     king_side_castle : Mapping[Team, bool]
     queen_side_castle : Mapping[Team, bool]
 
+    # whether previous move enables en passant, None or en passant coord
+    en_passant : np.array
 
     def __init__(self):
         self.pieces = []
         self.cache = []
         self.king_side_castle = { WHITE : True, BLACK : True }
         self.queen_side_castle = { WHITE : True, BLACK : True }
+        self.en_passant = None
         self.coord_map = {}
         self.team_and_type_map = \
             { team : { piece_type : [] 
@@ -90,45 +93,81 @@ class Board:
 
 
     def remove_piece_at(self, rank : int, file : int) -> bool:
-        """Removes piece at coord. True if there was a piece there, otherwise False."""
+        """Removes piece at coord. True if there was a piece there, otherwise False. Also returns function to undo removal."""
         assert within_bounds(rank, file), "position out of bounds"
         piece = self.coord_map.pop((rank, file), None)
 
         if piece is None:
-            return False
-
+            return False, None
+        
         # remove references
         self.pieces.remove(piece)
         self.team_and_type_map[piece.team][piece.piece_type].remove(piece)
-        return True
+
+        def undo_remove():
+            self.coord_map[rank, file] = piece
+            self.pieces.append(piece)
+            self.team_and_type_map[piece.team][piece.piece_type].append(piece)
+
+        return True, undo_remove
     
 
-    def move_piece(self, piece : Piece, move : Move, promote : int = -1):
-        if piece.piece_type == PAWN and piece.team == BLACK and piece.coord[0] == 1 and move.to_coord[0] == 3 or \
-                piece.piece_type == PAWN and piece.team == WHITE and piece.coord[0] == 6 and move.to_coord[0] == 4:
-            en_passant = move.to_coord
+    def move_piece(self, piece : Piece, to_coord : np.array, promote : int = -1):
+        # EN PASSANT STATE UPDATE
+        previous_en_passant = self.en_passant.copy()
+        def undo_en_passant():
+            self.en_passant = previous_en_passant
+
+        if piece.piece_type == PAWN and piece.team == BLACK and piece.coord[0] == 1 and to_coord[0] == 3 or \
+                piece.piece_type == PAWN and piece.team == WHITE and piece.coord[0] == 6 and to_coord[0] == 4:
+            self.en_passant = to_coord
         else:
-            en_passant = None
+            self.en_passant = None
 
+        # CACHE UPDATE
         self.cache.append(copy.deepcopy(self.pieces))
+        def undo_cache():
+            self.cache.pop()
 
-        if self.remove_piece_at(*move.to_coord) or piece.piece_type == PAWN:
+        # REMOVE AT TARGET LOCATION
+        was_capture, undo_remove = self.remove_piece_at(*to_coord)
+        if was_capture or piece.piece_type == PAWN:
             self.non_pawn_or_capture_moves = 0
         else:
             self.non_pawn_or_capture_moves += 1
-        self.coord_map.pop(tuple(piece.coord))
-        self.coord_map[*move.to_coord] = piece
-        piece.coord = move.to_coord
 
-        # promote pawn
+        # MOVE PIECE TO TARGET LOCATION
+        old_piece_coord = piece.coord.copy()
+        self.coord_map.pop(piece.coord)
+        self.coord_map[*to_coord] = piece
+        piece.coord = to_coord
+
+        def undo_move():
+            self.coord_map[*piece.coord] = piece
+            self.coord_map.pop(*to_coord)
+            piece.coord = old_piece_coord
+
+        # PROMOTE IF PAWN IS MOVED TO FURTHEST RANK
+        promoted = False
         promotions = [QUEEN, ROOK, BISHOP, KNIGHT]
         if promote != -1 and piece.piece_type == PAWN:
             promotion = promotions[promote]
             self.team_and_type_map[piece.team][PAWN].remove(piece)
             self.team_and_type_map[piece.team][promotion].append(piece)
             piece.piece_type = promotion
+            promoted = True
+        
+        def undo_promote():
+            if promoted:
+                piece.piece_type = PAWN
+                self.team_and_type_map[piece.team][promotion].remove(piece)
+                self.team_and_type_map[piece.team][PAWN].append(piece)
 
-        return en_passant
+        def undo():
+            for undo_func in [undo_en_passant, undo_cache, undo_remove, undo_move, undo_promote]:
+                undo_func()
+
+        return undo
 
 
     def check_50_move_rule(self):

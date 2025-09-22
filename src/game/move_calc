@@ -1,0 +1,117 @@
+import numpy as np
+from typing import List, Tuple, Mapping
+from game.constants import *
+from game.model import Piece, Board, Move
+from game.utils import within_bounds
+from game.check_valid import can_castle, is_valid
+
+
+def is_valid_move(board : Board, piece : Piece, to_coord : np.array) -> bool:
+    undo_move = board.move_piece(piece, to_coord)
+    move_is_valid = is_valid(board, piece.team)
+    undo_move()
+    return move_is_valid
+
+
+def to_index(coord : np.array):
+    return np.ravel_multi_index(coord, (8, 8))
+
+
+def get_moves(board : Board, team : Team, en_passant : np.array = None) -> Mapping[Piece, List[Move]]:
+    """Get available moves as a 64x64 move matrix."""
+
+    # Indices are 1D representation of squares on 8x8 board. [i, j] = 1 if piece at i can move to j
+    move_matrix = np.zeros((64, 64))
+    def can_move(from_coord, to_coord):
+        select = to_index(from_coord)
+        target = to_index(to_coord)
+        move_matrix[select, target] = 1
+
+    if board.check_threefold() or board.check_50_move_rule():
+        return move_matrix
+    
+    # squares populated by team
+    team_pop = np.zeros((8, 8))
+    for piece in board.of_team(team):
+        team_pop[*piece.coord] = 1
+
+    # squares populated by opponent
+    oppo_pop = np.zeros((8, 8))
+    for piece in board.of_team(other_team(team)):
+        oppo_pop[*piece.coord] = 1
+
+    # functions for square population checking
+    def is_team(coord):
+        return bool(team_pop[*coord])
+    def is_opponent(coord):
+        return bool(oppo_pop[*coord])
+    def is_empty(coord):
+        return board.coord_map[*coord] is None
+    
+    def is_en_passant(to_coord):
+        pawn_dir = -1 if team == WHITE else 1
+        return board.coord_map[*to_coord] is None \
+            and board.en_passant is not None \
+            and (board.en_passant == (to_coord - [pawn_dir, 0])).all()
+
+    # KING MOVES
+    king = board.get_king(team)
+    for to_coord in king.coord + directions:
+        if within_bounds(*to_coord) and \
+                not is_team(to_coord) and \
+                is_valid_move(board, king, to_coord):
+            can_move(king.coord, to_coord)
+
+    # CASTLING
+    king_castle, queen_castle = can_castle(board, team)
+    king_rank = 7 if team == WHITE else 0
+    if king_castle:
+        can_move(king.coord, [king_rank, 6])
+    if queen_castle:
+        can_move(king.coord, [king_rank, 2])
+
+    # PAWN MOVES
+    pawn_dir, pawn_start = (-1, 6) if team == WHITE else (1, 1)
+    for pawn in board.of_team_and_type(team, PAWN):
+        pawn_advance = pawn.coord + [pawn_dir, 0]
+        if within_bounds(*pawn_advance) and is_empty(pawn_advance) and is_valid_move(board, pawn, pawn_advance):
+            can_move(pawn.coord, pawn_advance)
+            pawn_advance2 = pawn.coord + [2 * pawn_dir, 0]
+            if pawn.coord[0] == pawn_start and is_empty(pawn_advance2):
+                can_move(pawn.coord, pawn_advance2)
+
+        for pawn_take in pawn.coord + [[pawn_dir, -1], [pawn_dir, 1]]:
+            if within_bounds(*pawn_take) and \
+                    (is_opponent(pawn_take) or is_en_passant(pawn_take)) and \
+                    is_valid_move(board, pawn, pawn_take):
+                can_move(pawn.coord, pawn_take)
+        
+    # KNIGHT MOVES
+    for knight in board.of_team_and_type(team, KNIGHT):
+        for knight_move in knight.coord + knight_diffs:
+            if within_bounds(*knight_move) and \
+                    not is_team(knight_move) and \
+                    is_valid_move(board, knight, knight_move):
+                can_move(knight.coord, knight_move)
+
+    # LINE MOVES
+    lat_dirs, lat_piece_types = [[0, 1], [0, -1], [1, 0], [-1, 0]], [ROOK, QUEEN]
+    diag_dirs, diag_piece_types = [[1, 1], [1, -1], [-1, 1], [-1, -1]], [BISHOP, QUEEN]
+    for dirs, piece_types in zip([lat_dirs, diag_dirs], [lat_piece_types, diag_piece_types]):
+        pieces = [piece for piece_type in piece_types for piece in board.of_team_and_type(team, piece_type)]
+        for piece in pieces:
+            for dir in dirs:
+                cur_coord = piece.coord + dir
+                # not valid if pinned, and only a single move needs to be checked for pin
+                if not within_bounds(*cur_coord) or not is_valid_move(board, piece, cur_coord):
+                    continue
+                while within_bounds(*cur_coord):
+                    if is_empty(cur_coord):
+                        can_move(piece.coord, cur_coord)
+                        cur_coord += dir
+                    else: 
+                        if is_opponent(cur_coord):
+                            can_move(piece.coord, cur_coord)
+                        break
+
+    return move_matrix

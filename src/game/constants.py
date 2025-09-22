@@ -48,3 +48,8 @@ knight_diffs = [[rank_diff, file_diff]
                 for rank_diff in [-2, -1, 1, 2]
                 for file_diff in [-2, -1, 1, 2]
                 if abs(rank_diff) != abs(file_diff)]
+
+directions = [[rank_diff, file_diff]
+              for rank_diff in range(-1, 2)
+              for file_diff in range(-1, 2)
+              if rank_diff != 0 or file_diff != 0]

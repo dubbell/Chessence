@@ -1,7 +1,7 @@
 from game.model import Board, Move
 from game.constants import *
 from game.utils import within_bounds
-from game.move_calc import get_moves
+from game.move_calc_deprecated import get_moves
 from ..utils import contains_exactly
 
 
