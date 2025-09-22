@@ -1,6 +1,8 @@
 from game.model import Board
 from game.constants import *
 
+import numpy as np
+
 queen_corner_ = np.array([
     [0, 1, 1],
     [1, 1, 0],

@@ -1,8 +1,10 @@
 from numpy.testing import assert_array_equal
 from game.model import Board
-from game.king_state import get_king_state
+from game.deprecated.king_state import get_king_state
 from game.constants import *
 from tests.utils import contains_exactly
+
+import numpy as np
 
 
 

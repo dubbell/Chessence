@@ -2,7 +2,7 @@ from game.model import Board, Move
 from game.constants import *
 from game.utils import within_bounds
 from game.deprecated.move_calc_deprecated import get_moves
-from tests.utils import contains_exactly
+from ..utils import contains_exactly
 
 import numpy as np
 

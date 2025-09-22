@@ -1,4 +1,4 @@
-from game.move_calc_deprecated import get_moves
+from game.deprecated.move_calc_deprecated import get_moves
 from game.model import Board, Move, Piece
 from game.constants import *
 from game.utils import other_team

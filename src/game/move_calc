@@ -1,7 +1,6 @@
 import numpy as np
-from typing import List, Tuple, Mapping
 from game.constants import *
-from game.model import Piece, Board, Move
+from game.model import Piece, Board
 from game.utils import within_bounds
 from game.check_valid import can_castle, is_valid
 
@@ -17,7 +16,7 @@ def to_index(coord : np.array):
     return np.ravel_multi_index(coord, (8, 8))
 
 
-def get_moves(board : Board, team : Team, en_passant : np.array = None) -> Mapping[Piece, List[Move]]:
+def get_moves(board : Board, team : Team, en_passant : np.array = None) -> np.array:
     """Get available moves as a 64x64 move matrix."""
 
     # Indices are 1D representation of squares on 8x8 board. [i, j] = 1 if piece at i can move to j

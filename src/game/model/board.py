@@ -1,9 +1,11 @@
 from typing import List, Mapping, Tuple, Self
-from ..constants import *
+from game.constants import *
 from .piece import Piece
 from .move import Move
-from ..utils import within_bounds
+from game.utils import within_bounds
+
 import copy
+import numpy as np
 
 
 PIECE_TYPE_ORDER = [ROOK, KNIGHT, BISHOP, QUEEN, KING, BISHOP, KNIGHT, ROOK]
