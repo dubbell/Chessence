@@ -1,9 +1,9 @@
 import numpy as np
 from typing import List, Tuple, Mapping
-from .constants import *
-from .model import Piece, Board, Move
-from .king_state import get_king_state
-from .utils import within_bounds
+from game.constants import *
+from game.model import Piece, Board, Move
+from game.deprecated.king_state import get_king_state
+from game.utils import within_bounds
 
 
 def get_moves(board : Board, team : Team, en_passant : np.array | Tuple[int, int] = None) -> Mapping[Piece, List[Move]]:

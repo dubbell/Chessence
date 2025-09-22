@@ -1,6 +1,5 @@
-from .model import Board
-from .constants import *
-from game.utils import within_bounds
+from game.model import Board
+from game.constants import *
 
 queen_corner_ = np.array([
     [0, 1, 1],
@@ -396,17 +395,4 @@ def get_king_state(board : Board, team : Team):
                 pin_coords.append(king_coord + lat_diff)
                 pin_dirs.append(lat_pin_index_to_dir[pin_index])
         
-
     return controlled, pin_coords, pin_dirs
-
-
-def check_controlled(board : Board, team : Team, pos : np.array):
-    for knight_diff in knight_diffs:
-        piece_pos = pos + knight_diff
-        piece = board.coord_map.get(tuple(*piece_pos))
-        if piece is not None and piece.piece_type == KNIGHT and piece.team == other_team(team):
-            return True
-    
-    for diff in [[rank_diff, file_diff] for rank_diff in range(-1, 2) for file_diff in range(-1, 2) if rank_diff != 0 and file_diff != 0]:
-        cur_pos = pos + diff
-        
