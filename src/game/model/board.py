@@ -1,7 +1,7 @@
-from typing import List, Mapping, Tuple, Self
+from typing import List, Mapping, Tuple
 from game.constants import *
-from .piece import Piece
-from .move import Move
+from game.model import Piece
+from game.model import Move
 from game.utils import within_bounds
 
 import copy
@@ -37,8 +37,8 @@ class Board:
     def __init__(self):
         self.pieces = []
         self.cache = []
-        self.king_side_castle = { WHITE : True, BLACK : True }
-        self.queen_side_castle = { WHITE : True, BLACK : True }
+        self.king_side_castle = { WHITE : False, BLACK : False }
+        self.queen_side_castle = { WHITE : False, BLACK : False }
         self.en_passant = None
         self.coord_map = {}
         self.team_and_type_map = \
@@ -100,7 +100,7 @@ class Board:
         piece = self.coord_map.pop((rank, file), None)
 
         if piece is None:
-            return False, None
+            return False, lambda: 0
         
         # remove references
         self.pieces.remove(piece)
@@ -114,10 +114,17 @@ class Board:
         return True, undo_remove
     
 
-    def move_piece(self, piece : Piece, to_coord : np.array, promote : int = -1):
+    def move_piece(self, move : Move):
+        piece, to_coord, promote = move.piece, move.to_coord, move.promote
+
+        # CACHE UPDATE
+        self.cache.append(self.get_state())
+        def undo_cache():
+            self.cache.pop()
+
         # EN PASSANT STATE UPDATE
-        previous_en_passant = self.en_passant.copy()
-        def undo_en_passant():
+        previous_en_passant = self.en_passant
+        def undo_en_passant_state():
             self.en_passant = previous_en_passant
 
         if piece.piece_type == PAWN and piece.team == BLACK and piece.coord[0] == 1 and to_coord[0] == 3 or \
@@ -125,11 +132,6 @@ class Board:
             self.en_passant = to_coord
         else:
             self.en_passant = None
-
-        # CACHE UPDATE
-        self.cache.append(copy.deepcopy(self.pieces))
-        def undo_cache():
-            self.cache.pop()
 
         # REMOVE AT TARGET LOCATION
         was_capture, undo_remove = self.remove_piece_at(*to_coord)
@@ -139,15 +141,22 @@ class Board:
             self.non_pawn_or_capture_moves += 1
 
         # MOVE PIECE TO TARGET LOCATION
-        old_piece_coord = piece.coord.copy()
-        self.coord_map.pop(piece.coord)
+        old_piece_coord = piece.coord
+        self.coord_map.pop(tuple(piece.coord), None)
         self.coord_map[*to_coord] = piece
         piece.coord = to_coord
 
         def undo_move():
-            self.coord_map[*piece.coord] = piece
-            self.coord_map.pop(*to_coord)
+            self.coord_map[*old_piece_coord] = piece
+            self.coord_map.pop(tuple(to_coord), None)
             piece.coord = old_piece_coord
+
+        pawn_dir = -1 if piece.team == WHITE else 1
+        is_en_passant = previous_en_passant is not None and (previous_en_passant + [pawn_dir, 0] == to_coord).all() and piece.piece_type == PAWN
+        if is_en_passant:
+            _, undo_en_passant = self.remove_piece_at(*previous_en_passant)
+        else:
+            undo_en_passant = lambda: 0
 
         # PROMOTE IF PAWN IS MOVED TO FURTHEST RANK
         promoted = False
@@ -166,7 +175,7 @@ class Board:
                 self.team_and_type_map[piece.team][PAWN].append(piece)
 
         def undo():
-            for undo_func in [undo_en_passant, undo_cache, undo_remove, undo_move, undo_promote]:
+            for undo_func in [undo_en_passant_state, undo_cache, undo_move, undo_remove, undo_en_passant, undo_promote]:
                 undo_func()
 
         return undo
@@ -182,24 +191,15 @@ class Board:
     def check_threefold(self):
         """Check for threefold repetition."""
         count = 0
-        for cached_pieces in self.cache:
-            if len(cached_pieces) != len(self.pieces):
-                continue
-            
+        current_state = self.get_state()
+        for cached_state in self.cache:            
             # if the same position is found twice in cache, then the same position was reached 3 times in total, thus threefold repetition
-            if np.all([cached_piece == current_piece for cached_piece, current_piece in zip(cached_pieces, self.pieces)]):
+            if (cached_state == current_state).all():
                 count += 1
                 if count >= 2:
                     return True
 
         return False
-
-
-    def move_to_new_board(self, piece : Piece, move : Move) -> Self:
-        copied_board = copy.deepcopy(self)
-        copied_piece = copied_board.coord_map[*piece.coord]
-        copied_board.move_piece(copied_piece, move)
-        return copied_board
         
 
     def get_state(self) -> np.array:
@@ -225,3 +225,6 @@ class Board:
             self.add_piece(PAWN, BLACK, 1, file)
             self.add_piece(PIECE_TYPE_ORDER[file], WHITE, 7, file)
             self.add_piece(PAWN, WHITE, 6, file)
+        
+        self.king_side_castle = { WHITE : True, BLACK : True }
+        self.queen_side_castle = { WHITE : True, BLACK : True }

@@ -2,6 +2,8 @@ from game.model import Board
 from game.constants import *
 from game.utils import within_bounds
 
+import numpy as np
+
 
 
 __all__ = ["can_castle", "is_valid"]
@@ -12,7 +14,8 @@ queen_side_diffs = [[0, -2], [0, -3]]
 def is_controlled(board : Board, coord : np.array, opponent : Team):
     """Check whether `coord` is controlled by `opponent` pieces."""
     # KING CHECK
-    if (np.abs(coord - board.get_king(opponent).coord) <= 1).all():
+    opponent_king = board.get_king(opponent)
+    if opponent_king is not None and (np.abs(coord - board.get_king(opponent).coord) <= 1).all():
         return True
     
     # PAWN CHECK
@@ -22,9 +25,11 @@ def is_controlled(board : Board, coord : np.array, opponent : Team):
         return True
     
     # KNIGHT CHECK
-    if np.any([board.coord_map[*maybe_knight_coord].piece_type == KNIGHT and board.coord_map[*maybe_knight_coord].team == opponent
+    if np.any([tuple(maybe_knight_coord) in board.coord_map
+               and board.coord_map[*maybe_knight_coord].piece_type == KNIGHT 
+               and board.coord_map[*maybe_knight_coord].team == opponent
                for maybe_knight_coord in coord + knight_diffs 
-               if within_bounds(maybe_knight_coord)]):
+               if within_bounds(*maybe_knight_coord)]):
         return True
     
     # DIRECTION CHECK: QUEENS, ROOKS, BISHOPS
@@ -32,7 +37,7 @@ def is_controlled(board : Board, coord : np.array, opponent : Team):
         is_diagonal = not np.equal(dir, 0).any() # diagonal vs lateral movement
         cur_coord = coord + dir
         while within_bounds(*cur_coord):
-            piece = board.coord_map[*cur_coord]
+            piece = board.coord_map.get(tuple(cur_coord))
             if piece is None:
                 cur_coord += dir
                 continue
@@ -46,9 +51,11 @@ def is_controlled(board : Board, coord : np.array, opponent : Team):
 
 def is_valid(board : Board, team : Team):
     """Check if current position is valid after a move made by `team`. Determined by whether `team` king is in check."""
-    king_coord = board.get_king(team).coord
+    king = board.get_king(team)
+    if king is None:
+        return True
     opponent = other_team(team)
-    return is_controlled(board, king_coord, opponent)
+    return not is_controlled(board, king.coord, opponent)
 
 
 def can_castle(board : Board, team : Team):
@@ -59,13 +66,13 @@ def can_castle(board : Board, team : Team):
 
     if king_castle:
         for coord in np.array([[king_rank, file] for file in range(4, 7)]):
-            if board.coord_map[*coord] is not None or is_controlled(board, coord, opponent):
+            if board.coord_map.get(*coord) is not None or is_controlled(board, coord, opponent):
                 king_castle = False
                 break
 
     if queen_castle:
         for coord in np.array([[king_rank, file] for file in range(2, 5)]):
-            if board.coord_map[*coord] is not None or is_controlled(board, coord, opponent):
+            if board.coord_map.get(*coord) is not None or is_controlled(board, coord, opponent):
                 king_castle = False
                 break
     

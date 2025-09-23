@@ -14,7 +14,7 @@ class Piece:
 
     
     def __repr__(self):
-        return f"{self.team} {self.piece_type} : {self.coord}"
+        return f"[{self.team.name} {self.piece_type.name} {self.coord}]"
     
 
     def __hash__(self):

@@ -64,7 +64,7 @@ def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
     promote = action[2]
 
     selected_piece = board.coord_map[*select]
-    en_passant = board.move_piece(selected_piece, Move(target), promote)
+    en_passant = board.move_piece(Move(selected_piece, target, promote))
     
     next_state = board.get_state()
 

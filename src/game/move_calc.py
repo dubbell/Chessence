@@ -1,31 +1,31 @@
 import numpy as np
 from game.constants import *
-from game.model import Piece, Board
-from game.utils import within_bounds
+from game.model import Piece, Board, Move
+from game.utils import within_bounds, to_index
 from game.check_valid import can_castle, is_valid
 
 
 def is_valid_move(board : Board, piece : Piece, to_coord : np.array) -> bool:
-    undo_move = board.move_piece(piece, to_coord)
+    undo_move = board.move_piece(Move(piece, to_coord))
     move_is_valid = is_valid(board, piece.team)
     undo_move()
     return move_is_valid
 
 
-def to_index(coord : np.array):
-    return np.ravel_multi_index(coord, (8, 8))
-
-
-def get_moves(board : Board, team : Team, en_passant : np.array = None) -> np.array:
-    """Get available moves as a 64x64 move matrix."""
+def get_moves(board : Board, team : Team) -> np.array:
+    """Get available moves as a 64x64 move matrix.
+       checkmate -> None
+       stalemate/draw -> move_matrix with all 0's
+       available moves -> move_matrix with some 1's"""
 
     # Indices are 1D representation of squares on 8x8 board. [i, j] = 1 if piece at i can move to j
-    move_matrix = np.zeros((64, 64))
+    move_matrix = np.zeros((64, 64)).astype(np.int32)
     def can_move(from_coord, to_coord):
         select = to_index(from_coord)
         target = to_index(to_coord)
         move_matrix[select, target] = 1
 
+    # all 0's in move_matrix -> draw
     if board.check_threefold() or board.check_50_move_rule():
         return move_matrix
     
@@ -45,21 +45,28 @@ def get_moves(board : Board, team : Team, en_passant : np.array = None) -> np.ar
     def is_opponent(coord):
         return bool(oppo_pop[*coord])
     def is_empty(coord):
-        return board.coord_map[*coord] is None
+        return board.coord_map.get(tuple(coord)) is None
     
     def is_en_passant(to_coord):
         pawn_dir = -1 if team == WHITE else 1
-        return board.coord_map[*to_coord] is None \
+        return board.coord_map.get(tuple(to_coord)) is None \
             and board.en_passant is not None \
             and (board.en_passant == (to_coord - [pawn_dir, 0])).all()
+    
+    in_check = not is_valid(board, team)
 
     # KING MOVES
     king = board.get_king(team)
-    for to_coord in king.coord + directions:
-        if within_bounds(*to_coord) and \
-                not is_team(to_coord) and \
-                is_valid_move(board, king, to_coord):
-            can_move(king.coord, to_coord)
+    if king is not None:
+        for to_coord in king.coord + directions:
+            if within_bounds(*to_coord) and \
+                    not is_team(to_coord) and \
+                    is_valid_move(board, king, to_coord):
+                can_move(king.coord, to_coord)
+        
+    # CHECKMATE
+    if in_check and (move_matrix == 0).all():
+        return None
 
     # CASTLING
     king_castle, queen_castle = can_castle(board, team)
@@ -73,7 +80,9 @@ def get_moves(board : Board, team : Team, en_passant : np.array = None) -> np.ar
     pawn_dir, pawn_start = (-1, 6) if team == WHITE else (1, 1)
     for pawn in board.of_team_and_type(team, PAWN):
         pawn_advance = pawn.coord + [pawn_dir, 0]
-        if within_bounds(*pawn_advance) and is_empty(pawn_advance) and is_valid_move(board, pawn, pawn_advance):
+        if within_bounds(*pawn_advance) and \
+                is_empty(pawn_advance) and \
+                is_valid_move(board, pawn, pawn_advance):
             can_move(pawn.coord, pawn_advance)
             pawn_advance2 = pawn.coord + [2 * pawn_dir, 0]
             if pawn.coord[0] == pawn_start and is_empty(pawn_advance2):
