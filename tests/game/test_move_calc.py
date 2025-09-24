@@ -6,6 +6,8 @@ from game.move_calc import get_moves
 import numpy as np
 from typing import List
 
+import pytest
+
 
 def move_matrix_contains_exactly(move_matrix : np.array, moves : List[Move]):
     true_matrix = np.zeros((64, 64))
@@ -33,25 +35,25 @@ def piece_can_move_exactly(piece : Piece, move_matrix : np.array, moves : List[M
             f"extra move in move_matrix: {np.unravel_index(select, (8, 8))} to {np.unravel_index(target, (8, 8))}"
 
 
-def test_king_moves():
-    for king_coord in np.array([[rank, file] for rank in range(8) for file in range(8)]):
-        board = Board()
-        king_piece = board.add_piece(KING, WHITE, *king_coord)
+@pytest.mark.parametrize("king_coord", [np.array([rank, file]) for rank in range(8) for file in range(8)])
+def test_king_moves(king_coord):
+    board = Board()
+    king_piece = board.add_piece(KING, WHITE, *king_coord)
 
-        move_matrix = get_moves(board, WHITE)
+    move_matrix = get_moves(board, WHITE)
 
-        board_state = board.get_state()
+    board_state = board.get_state()
 
-        true_moves = [Move(king_piece, move) for move in king_coord + [
-                [rank_diff, file_diff]
-                for rank_diff in [-1, 0, 1]
-                for file_diff in [-1, 0, 1]
-                if rank_diff != 0 or file_diff != 0]
-            if within_bounds(*move)]
+    true_moves = [Move(king_piece, move) for move in king_coord + [
+            [rank_diff, file_diff]
+            for rank_diff in [-1, 0, 1]
+            for file_diff in [-1, 0, 1]
+            if rank_diff != 0 or file_diff != 0]
+        if within_bounds(*move)]
 
-        assert (board_state == board.get_state()).all(), "board state not reversed"
+    assert (board_state == board.get_state()).all(), "board state not reversed"
 
-        move_matrix_contains_exactly(move_matrix, true_moves)
+    move_matrix_contains_exactly(move_matrix, true_moves)
 
 
 def test_king_moves_controlled():
@@ -157,24 +159,66 @@ def test_king_moves_blocked():
     piece_can_move_exactly(king_piece, move_matrix, true_moves)
 
 
-def test_pawn_moves():
-    for team, ranks in zip([WHITE, BLACK], [[6, 5, 4], [1, 2, 3]]):
-        for file in range(8):
-            board = Board() 
+@pytest.mark.parametrize("rank,team", [(7, WHITE), (0, BLACK)])
+def test_castling(rank, team):
+    board = Board()
+    board.reset()
 
-            pawn_piece = board.add_piece(PAWN, team, ranks[0], file)
-            move_matrix = get_moves(board, team)
-            true_moves = [Move(pawn_piece, [rank, file]) for rank in ranks[1:]]
-            move_matrix_contains_exactly(move_matrix, true_moves)
+    assert board.king_side_castle[team]
+    assert board.queen_side_castle[team]
+    
+    king_castle_move = np.ravel_multi_index((rank, 4), (8, 8)), np.ravel_multi_index((rank, 6), (8, 8))
+    queen_castle_move = np.ravel_multi_index((rank, 4), (8, 8)), np.ravel_multi_index((rank, 2), (8, 8))
 
-            board.add_piece(PAWN, other_team(team), ranks[2], file)
-            true_moves.remove(Move(pawn_piece, [ranks[2], file]))
-            move_matrix = get_moves(board, team)
-            move_matrix_contains_exactly(move_matrix, true_moves)
+    def assert_castling(king_castle, queen_castle):
+        move_matrix = get_moves(board, team)
+        assert bool(move_matrix[*king_castle_move]) == king_castle, f"{king_castle} != {bool(move_matrix[*king_castle_move])}"
+        assert bool(move_matrix[*queen_castle_move]) == queen_castle, f"{king_castle} != {bool(move_matrix[*queen_castle_move])}"
 
-            board.add_piece(PAWN, other_team(team), ranks[1], file)
-            move_matrix = get_moves(board, team)
-            assert (move_matrix == 0).all()
+    assert_castling(False, False)
+
+    board.remove_piece_at(rank, 5)
+    assert_castling(False, False)
+
+    board.remove_piece_at(rank, 6)
+    assert_castling(True, False)
+
+    board.king_side_castle[team] = False
+    assert_castling(False, False)
+
+    for file in range(3, 1, -1):
+        board.remove_piece_at(rank, file)
+        assert_castling(False, False)
+
+    board.remove_piece_at(rank, 1)
+    assert_castling(False, True)
+
+    board.queen_side_castle[team] = False
+    assert_castling(False, False)
+
+    board.queen_side_castle[team] = True
+    board.add_piece(KNIGHT, other_team(team), 5 if team == WHITE else 2, 2)
+
+    assert_castling(False, False)
+
+
+@pytest.mark.parametrize("team,ranks,file", [(*team_ranks, file) for team_ranks in list(zip([WHITE, BLACK], [[6, 5, 4], [1, 2, 3]])) for file in range(8)])
+def test_pawn_moves(team, ranks, file):
+    board = Board() 
+
+    pawn_piece = board.add_piece(PAWN, team, ranks[0], file)
+    move_matrix = get_moves(board, team)
+    true_moves = [Move(pawn_piece, [rank, file]) for rank in ranks[1:]]
+    move_matrix_contains_exactly(move_matrix, true_moves)
+
+    board.add_piece(PAWN, other_team(team), ranks[2], file)
+    true_moves.remove(Move(pawn_piece, [ranks[2], file]))
+    move_matrix = get_moves(board, team)
+    move_matrix_contains_exactly(move_matrix, true_moves)
+
+    board.add_piece(PAWN, other_team(team), ranks[1], file)
+    move_matrix = get_moves(board, team)
+    assert (move_matrix == 0).all()
             
 
 def test_pawn_capture():
@@ -396,51 +440,51 @@ def test_rook_moves():
 
 
 def test_queen_moves():
-        board = Board()
+    board = Board()
 
-        queen_piece = board.add_piece(QUEEN, WHITE, 2, 3)
+    queen_piece = board.add_piece(QUEEN, WHITE, 2, 3)
 
-        true_moves = []
+    true_moves = []
 
-        for diff in np.array([[-1, -1], [-1, 1], [1, -1], [1, 1], [0, 1], [0, -1], [1, 0], [-1, 0]]):
-            to_coord = queen_piece.coord + diff
-            while within_bounds(*to_coord):
-                true_moves.append(Move(queen_piece, to_coord))
-                to_coord = to_coord + diff
-        
-        move_matrix = get_moves(board, WHITE)
+    for diff in np.array([[-1, -1], [-1, 1], [1, -1], [1, 1], [0, 1], [0, -1], [1, 0], [-1, 0]]):
+        to_coord = queen_piece.coord + diff
+        while within_bounds(*to_coord):
+            true_moves.append(Move(queen_piece, to_coord))
+            to_coord = to_coord + diff
+    
+    move_matrix = get_moves(board, WHITE)
 
-        piece_can_move_exactly(queen_piece, move_matrix, true_moves)
+    piece_can_move_exactly(queen_piece, move_matrix, true_moves)
 
-        board.add_piece(KING, WHITE, 4, 5)
-        true_moves.remove(Move(queen_piece, [4, 5]))
-        true_moves.remove(Move(queen_piece, [5, 6]))
-        true_moves.remove(Move(queen_piece, [6, 7]))
-        move_matrix = get_moves(board, WHITE)
-        piece_can_move_exactly(queen_piece, move_matrix, true_moves)
+    board.add_piece(KING, WHITE, 4, 5)
+    true_moves.remove(Move(queen_piece, [4, 5]))
+    true_moves.remove(Move(queen_piece, [5, 6]))
+    true_moves.remove(Move(queen_piece, [6, 7]))
+    move_matrix = get_moves(board, WHITE)
+    piece_can_move_exactly(queen_piece, move_matrix, true_moves)
 
-        board.add_piece(BISHOP, BLACK, 0, 1)
-        for diff in np.array([[-1, 1], [1, -1], [0, 1], [0, -1], [1, 0], [-1, 0]]):
-            to_coord = queen_piece.coord + diff
-            while within_bounds(*to_coord):
-                true_moves.remove(Move(queen_piece, to_coord))
-                to_coord = to_coord + diff
-        
-        move_matrix = get_moves(board, WHITE)
-        piece_can_move_exactly(queen_piece, move_matrix, true_moves)
+    board.add_piece(BISHOP, BLACK, 0, 1)
+    for diff in np.array([[-1, 1], [1, -1], [0, 1], [0, -1], [1, 0], [-1, 0]]):
+        to_coord = queen_piece.coord + diff
+        while within_bounds(*to_coord):
+            true_moves.remove(Move(queen_piece, to_coord))
+            to_coord = to_coord + diff
+    
+    move_matrix = get_moves(board, WHITE)
+    piece_can_move_exactly(queen_piece, move_matrix, true_moves)
 
-        board.remove_piece_at(4, 5)
-        board.add_piece(KING, WHITE, 2, 7)
-        board.add_piece(ROOK, BLACK, 2, 0)
+    board.remove_piece_at(4, 5)
+    board.add_piece(KING, WHITE, 2, 7)
+    board.add_piece(ROOK, BLACK, 2, 0)
 
-        true_moves = []
-        for diff in np.array([[0, 1], [0, -1]]):
-            to_coord = queen_piece.coord + diff
-            while within_bounds(*to_coord):
-                true_moves.append(Move(queen_piece, to_coord))
-                to_coord = to_coord + diff
+    true_moves = []
+    for diff in np.array([[0, 1], [0, -1]]):
+        to_coord = queen_piece.coord + diff
+        while within_bounds(*to_coord):
+            true_moves.append(Move(queen_piece, to_coord))
+            to_coord = to_coord + diff
 
-        true_moves.remove(Move(queen_piece, [2, 7]))
+    true_moves.remove(Move(queen_piece, [2, 7]))
 
-        move_matrix = get_moves(board, WHITE)
-        piece_can_move_exactly(queen_piece, move_matrix, true_moves)
+    move_matrix = get_moves(board, WHITE)
+    piece_can_move_exactly(queen_piece, move_matrix, true_moves)

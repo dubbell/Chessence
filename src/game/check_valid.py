@@ -64,16 +64,22 @@ def can_castle(board : Board, team : Team):
     opponent = other_team(team)
     king_castle, queen_castle = board.king_side_castle[team], board.queen_side_castle[team]
 
+    if is_controlled(board, np.array([king_rank, 4]), opponent):
+        king_castle, queen_castle = False, False
+
     if king_castle:
-        for coord in np.array([[king_rank, file] for file in range(4, 7)]):
-            if board.coord_map.get(*coord) is not None or is_controlled(board, coord, opponent):
+        for coord in np.array([[king_rank, file] for file in range(5, 7)]):
+            if board.coord_map.get(tuple(coord), None) is not None or is_controlled(board, coord, opponent):
                 king_castle = False
+                break
+        
+    if queen_castle:
+        for coord in np.array([[king_rank, file] for file in range(2, 4)]):
+            if board.coord_map.get(tuple(coord), None) is not None or is_controlled(board, coord, opponent):
+                queen_castle = False
                 break
 
-    if queen_castle:
-        for coord in np.array([[king_rank, file] for file in range(2, 5)]):
-            if board.coord_map.get(*coord) is not None or is_controlled(board, coord, opponent):
-                king_castle = False
-                break
+        if board.coord_map.get((king_rank, 1), None) is not None:
+            queen_castle = False
     
     return king_castle, queen_castle
