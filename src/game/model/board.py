@@ -140,6 +140,25 @@ class Board:
         else:
             self.non_pawn_or_capture_moves += 1
 
+        # ROOK MOVE IN CASE OF CASTLING
+        king_rank = 0 if piece.team == BLACK else 7
+        is_castle = piece.piece_type == KING and (piece.coord == [king_rank, 4]).all() and ((to_coord == [king_rank, 6]).all() or (to_coord == [king_rank, 2]).all())
+        if is_castle:
+            king_castle = (to_coord == [king_rank, 6]).all()
+            assert (king_castle and self.king_side_castle[piece.team]) or (not king_castle and self.queen_side_castle[piece.team]), "castle move not available"
+            old_rook_coord = np.array([king_rank, 7] if king_castle else [king_rank, 0])
+            new_rook_coord = np.array([king_rank, 5] if king_castle else [king_rank, 3])
+            rook_piece = self.coord_map.pop(tuple(old_rook_coord), None)
+            assert rook_piece is not None and rook_piece.piece_type == ROOK and rook_piece.team == piece.team
+            self.coord_map[*new_rook_coord] = rook_piece
+            rook_piece.coord = new_rook_coord
+        
+        def undo_castle():
+            if is_castle:
+                self.coord_map[*old_rook_coord] = rook_piece
+                self.coord_map.pop(tuple(new_rook_coord), None)
+                rook_piece.coord = old_rook_coord
+
         # MOVE PIECE TO TARGET LOCATION
         old_piece_coord = piece.coord
         self.coord_map.pop(tuple(piece.coord), None)
@@ -159,6 +178,8 @@ class Board:
             undo_en_passant = lambda: 0
 
         # PROMOTE IF PAWN IS MOVED TO FURTHEST RANK
+        end_rank = 6 if piece.team == BLACK else 1
+        assert (promote == -1) == (old_piece_coord[0] != end_rank) or piece.piece_type != PAWN, f"promotion error {promote}, {to_coord}, {piece}"
         promoted = False
         promotions = [QUEEN, ROOK, BISHOP, KNIGHT]
         if promote != -1 and piece.piece_type == PAWN:
@@ -175,7 +196,7 @@ class Board:
                 self.team_and_type_map[piece.team][PAWN].append(piece)
 
         def undo():
-            for undo_func in [undo_en_passant_state, undo_cache, undo_move, undo_remove, undo_en_passant, undo_promote]:
+            for undo_func in [undo_en_passant_state, undo_cache, undo_move, undo_castle, undo_remove, undo_en_passant, undo_promote]:
                 undo_func()
 
         return undo
