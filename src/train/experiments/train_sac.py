@@ -1,74 +1,42 @@
-from game.deprecated.move_calc_deprecated import get_moves
+from game.move_calc import get_moves
 from game.model import Board, Move, Piece
 from game.constants import *
 from game.utils import other_team
 
 from train.model.buffer import ReplayBuffer
 from train.model.sac import SAC
-from train.utils import DRAW, LOSS, CONTINUE, to_ndim
+from train.utils import to_ndim
 
 import git
 import numpy as np
 import mlflow
 from datetime import datetime
 from tqdm import tqdm
-from typing import Mapping, List
 
 import torch
 torch.autograd.set_detect_anomaly(True)
 
 
-def will_be_promoted(team, rank):
-    """If the pawn will be promoted when moved."""
-    return team == WHITE and rank == 1 or team == BLACK and rank == 6
-
-
-def get_move_matrix(move_map : Mapping[Piece, List[Move]]):
-    """Simplified representation of all available moves. 
-       Row = coordinate of piece that is being moved (select). 
-       Col = coordinate that the selected piece can be moved to (target).
-       0 if move not available, 1 if move is available, 2 if available and will promote pawn"""
-    
-    move_matrix = np.zeros((64, 64))
-    for piece, moves in move_map.items():
-        available_select = np.ravel_multi_index(piece.coord, (8, 8))
-        for move in moves:
-            available_target = np.ravel_multi_index(move.to_coord, (8, 8))
-            move_matrix[available_select, available_target] = \
-                2 if piece.piece_type == PAWN and will_be_promoted(piece.team, piece.coord[0]) else 1
-
-    return move_matrix
-
-
-def take_action(board : Board, agent : SAC, team : Team, en_passant : np.array):
+def take_action(current_state : np.array, move_matrix : np.array, board : Board, agent : SAC, team : Team):
     """
     Let agent take action on board for the given team.
     Input: the board, the agent, and the agent's team
-    Output: next state, move matrix, action, potential en passant location, result
+    Output: next state, next move matrix, action
     """
-
-    current_state = board.get_state()
-    move_map = get_moves(board, team, en_passant)
-    # no moves available because checkmate
-    if move_map is None:
-        return current_state, None, None, None, LOSS
-    # no moves available because draw
-    elif not move_map:
-        return current_state, None, None, None, DRAW
-
-    move_matrix = get_move_matrix(move_map)
-    action = agent.sample_actions(current_state, move_matrix, team.value)[:3]  # ignore logp
+    action = agent.sample_actions(current_state, move_matrix)[:3]  # ignore logp
 
     select = np.concatenate(np.unravel_index(action[0], (8, 8)))
     target = np.concatenate(np.unravel_index(action[1], (8, 8)))
     promote = action[2]
 
     selected_piece = board.coord_map[*select]
-    en_passant = board.move_piece(Move(selected_piece, target, promote))
+    board.move_piece(Move(selected_piece, target, promote))
     
-    next_state = board.get_state()
+    next_team = other_team(team)
+    next_state = board.get_state(next_team)
+    next_move_matrix = get_moves(board, next_team)
 
-    return next_state, move_matrix, action, en_passant, CONTINUE
+    return next_state, next_move_matrix, action
 
 
 
@@ -90,6 +58,7 @@ def start_training(config):
     en_passant = None
 
     state = board.get_state()
+    move_matrix = get_moves(board, WHITE)
 
     train_agent, fixed_agent = SAC(), SAC()
     white_agent, black_agent = train_agent, fixed_agent
@@ -97,10 +66,6 @@ def start_training(config):
     train_steps_remaining = 0
     game_count = 0
     current_team = WHITE
-
-    # ensures that the black state transition is not added after first move
-    # and so that the final game runs to completion
-    first_step = True
 
     if config["enable_logging"]:
         mlflow.log_params({
@@ -120,29 +85,31 @@ def start_training(config):
             train_steps_remaining -= 1
 
         # UPDATE FIXED AGENT AT SET INTERVALS
-        if first_step and (game_count - config["train_start"]) % config["update_interval"] == 0 and game_count >= config["train_start"]:
+        if (game_count - config["train_start"]) % config["update_interval"] == 0 and game_count >= config["train_start"]:
             fixed_agent.load_state_dict(train_agent.state_dict())
             train_loss_count, train_win_count = 0, 0
 
         # TAKE ENVIRONMENT STEP
         current_agent = white_agent if current_team == WHITE else black_agent
-        next_state, move_matrix, action, en_passant, move_result = \
-            take_action(board, current_agent, current_team, en_passant)
+        next_state, next_move_matrix, action = take_action(state, move_matrix, board, current_agent, current_team)
 
-        # REPLAY BUFFER INSERTION
-        if move_result == CONTINUE:
-            replay_buffer.insert(state, move_matrix, *action, 0, current_team.value)
-        else: 
-            # if the game has ended, i.e. player had no moves available,
-            # set rewards for previous moves
-            replay_buffer.set_win_rewards(move_result)
+        # EVALUATE BOARD STATE AND MOVE, BUFFER INSERTION, LOGGING
+        # checkmate or draw
+        if next_move_matrix is None or (next_move_matrix == 0).all():
+            # checkmate
+            if next_move_matrix is None:
+                replay_buffer.insert(state, next_state, move_matrix, next_move_matrix, *action, 50, True)
+            # draw
+            else:
+                replay_buffer.insert(state, next_state, move_matrix, next_move_matrix, *action, -20, True)
             
             # reset board and switch teams
             board.reset()
-            first_step = True
-            state = board.get_state()
-            white_agent, black_agent = black_agent, white_agent
             current_team = WHITE
+            white_agent, black_agent = black_agent, white_agent
+
+            state = board.get_state(current_team)
+            move_matrix = get_moves(board, current_team)
             
             game_count += 1
             pb.update()
@@ -157,13 +124,15 @@ def start_training(config):
 
             if game_count >= config["train_start"]:
                 train_steps_remaining += config["train_steps_per_game"]
+            
+        # game continues
+        else:  
+            replay_buffer.insert(state, next_state, move_matrix, next_move_matrix, *action, 0, False)
 
-            continue
-
-        # PREPARE FOR NEXT ITERATION
-        state = next_state
-        current_team = other_team(current_team)
-        first_step = False
+            # prepare for next iteration
+            state = next_state
+            move_matrix = next_move_matrix
+            current_team = other_team(current_team)
     
     pb.close()
 

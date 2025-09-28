@@ -89,7 +89,7 @@ class SAC:
         self.critic.eval()
 
     
-    def sample_actions(self, board_states, move_matrices, teams, eval = False) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def sample_actions(self, board_states, move_matrices, eval = False) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Sample one or more actions from agent.
 
@@ -101,7 +101,7 @@ class SAC:
 
         Returns: select, target, promote, logp
         """
-        board_states, move_matrices, teams = validate_tensors([board_states, move_matrices, teams], [4, 3, 1])
+        board_states, move_matrices = validate_tensors([board_states, move_matrices], [4, 3])
         
         if eval:
             self.eval()
@@ -109,7 +109,7 @@ class SAC:
             self.train()
 
         embedding = self.encoder(board_states)
-        return self.actor(embedding, teams, move_matrices)
+        return self.actor(embedding, move_matrices)
 
 
     def actor_alpha_train_step(self, batch : Batch):
@@ -119,16 +119,16 @@ class SAC:
         embeddings = self.encoder(batch.states)
 
         # sample actions from given states
-        select, target, promote, logp = self.actor.forward(embeddings, batch.teams, batch.move_matrices)
+        select, target, promote, logp = self.actor.forward(embeddings, batch.move_matrices)
 
         # train alpha parameter
         alpha = torch.exp(self.log_alpha)
-        alpha_loss = self.alpha_loss_func(alpha, logp.detach(), self.target_entropy)
+        alpha_loss = self.alpha_loss_func.forward(alpha, logp.detach(), self.target_entropy)
 
         # train actor (critic parameters are detached)
         q1, q2 = self.critic.forward(embeddings, batch.teams, select, target, promote)
         sampled_q = torch.minimum(q1, q2)
-        actor_loss = self.actor_loss_func(alpha.detach(), logp, sampled_q.detach())
+        actor_loss = self.actor_loss_func.forward(alpha.detach(), logp, sampled_q.detach())
 
         total_loss = alpha_loss + actor_loss
         total_loss.backward()
@@ -139,7 +139,7 @@ class SAC:
         log_info = {
             "alpha_loss": alpha_loss.detach(),
             "actor_loss": actor_loss.detach(),
-            "alpha": alpha,
+            "alpha": alpha.detach(),
             "action_logp": logp.detach() 
         }
 
@@ -147,31 +147,29 @@ class SAC:
     
     def critic_train_step(self, batch : Batch, alpha : Tensor):
         self.critic_opt.zero_grad()
-
-        # episode termination flag
-        done = batch.rewards != 0
         
         embeddings = self.encoder(batch.states)
         next_embeddings = self.encoder(batch.next_states)
 
         # current q
-        q1, q2 = self.critic(embeddings, batch.teams, batch.select, batch.target, batch.promote)
+        q1, q2 = self.critic.forward(embeddings, batch.select, batch.target, batch.promote)
 
-        next_select, next_target, next_promote, action_logp = self.actor.forward(next_embeddings, batch.teams, batch.next_move_matrices)
+        next_select, next_target, next_promote, action_logp = self.actor.forward(next_embeddings, batch.next_move_matrices)
 
         with torch.no_grad():
-            next_q1, next_q2 = self.target_critic.forward(next_embeddings, batch.teams, next_select, next_target, next_promote)
+            # q's for next move (opponent)
+            next_q1, next_q2 = self.target_critic.forward(next_embeddings, next_select, next_target, next_promote)
             next_q = torch.minimum(next_q1, next_q2) - alpha * action_logp
 
             # target q, filtered by whether the next state is terminating
-            target_q = batch.rewards + self.gamma * ~done * next_q
+            # second term negated because move is made by opponent (minimax)
+            target_q = batch.rewards + self.gamma * (1 - batch.done) * (-next_q)
 
         critic_loss1 = self.mse_loss_func(q1, target_q)
         critic_loss2 = self.mse_loss_func(q2, target_q)
         critic_loss = (critic_loss1 + critic_loss2).mean()
 
         critic_loss.backward()
-
         self.critic_opt.step()
 
         # update target critic parameters
@@ -180,7 +178,7 @@ class SAC:
 
         log_info = {
             "critic_loss": critic_loss.detach(),
-            "q": q1
+            "q": q1.detach()
         }
 
         return log_info

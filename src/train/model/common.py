@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import torch
 from torch import Tensor
 from collections import namedtuple
-from train.utils import tensor_check
+from train.utils import tensor_check, to_ndim
 
 
 class SimpleConv(nn.Module):
@@ -28,7 +28,7 @@ class SimpleConv(nn.Module):
         
 
 class StateEncoder(nn.Module):
-    """Takes board state and outputs 511 dim embedding, to be concatenated with team."""
+    """Takes board state and outputs 512 dim embedding, to be concatenated with team."""
 
     def __init__(self):
         super().__init__()
@@ -40,18 +40,16 @@ class StateEncoder(nn.Module):
             SimpleConv(32, 64, False), # outputs 4x4 
             SimpleConv(64, 64, False), # outputs 3x3
             SimpleConv(64, 128, False), # outputs 2x2
-            nn.Conv2d(128, 511, kernel_size=2, stride=1), # outputs 1x1
+            SimpleConv(128, 512, False), # outputs 1x1
             nn.Flatten())
     
     def forward(self, board_state : Tensor) -> Tensor:
-        board_state = tensor_check(board_state)
-        if board_state.dim() == 3:
-            board_state = board_state.unsqueeze(0)
+        board_state = to_ndim(tensor_check(board_state), 4)
         return self.conv(board_state)
 
 
 class Critic(nn.Module):
-    """Action-value function, takes team and board embedding (1 and 511) and produces estimated value."""
+    """Action-value function, takes board embedding (512) and produces estimated value."""
     
     def __init__(self):
         super().__init__()
@@ -68,11 +66,10 @@ class Critic(nn.Module):
             nn.Linear(512, 1))
         
     
-    def forward(self, embeddings : Tensor, teams : Tensor, select : Tensor, target : Tensor, promote : Tensor):
-        embeddings, teams, select, target, promote = map(tensor_check, [embeddings, teams, select, target, promote])
+    def forward(self, embeddings : Tensor, select : Tensor, target : Tensor, promote : Tensor):
+        embeddings, select, target, promote = map(tensor_check, [embeddings, select, target, promote])
 
-        assert embeddings.shape[1:] == (511,), embeddings.shape
-        assert teams.dim() == 1, teams.shape
+        assert embeddings.shape[1:] == (512,), embeddings.shape
         assert select.dim() == 1, select.shape
         assert target.dim() == 1, target.shape
         assert promote.dim() == 1, promote.shape
@@ -81,7 +78,7 @@ class Critic(nn.Module):
         one_hot_target = F.one_hot(target, 64)
         one_hot_promote = torch.zeros((promote.shape[0], 4)).long()
         one_hot_promote[promote != -1] = F.one_hot(promote[promote != -1], 4)
-        stacked = torch.hstack((embeddings, teams.reshape((-1, 1)), one_hot_select, one_hot_target, one_hot_promote))
+        stacked = torch.hstack((embeddings, one_hot_select, one_hot_target, one_hot_promote))
         return self.linear(stacked).reshape(-1)
 
 
@@ -94,8 +91,8 @@ class DoubleCritic(nn.Module):
         self.critic1 = Critic()
         self.critic2 = Critic()
 
-    def forward(self, board_embs : Tensor, teams : Tensor, select : Tensor, target : Tensor, promote : Tensor):
-        return self.critic1(board_embs, teams, select, target, promote), self.critic2(board_embs, teams, select, target, promote)
+    def forward(self, board_embs : Tensor, select : Tensor, target : Tensor, promote : Tensor):
+        return self.critic1(board_embs, select, target, promote), self.critic2(board_embs, select, target, promote)
         
 
 
@@ -173,15 +170,13 @@ class Actor(nn.Module):
         return promote.long(), promote_logp
 
     
-    def forward(self, embeddings : Tensor, teams : Tensor, move_matrices : Tensor):
-        embeddings, teams, move_matrices = map(tensor_check, [embeddings, teams, move_matrices])
+    def forward(self, embeddings : Tensor, move_matrices : Tensor):
+        embeddings, move_matrices = map(tensor_check, [embeddings, move_matrices])
 
-        assert embeddings.shape[1:] == (511,), embeddings.shape
-        assert teams.dim() == 1, teams.shape
+        assert embeddings.shape[1:] == (512,), embeddings.shape
         assert move_matrices.shape[1:] == (64, 64), move_matrices.shape
 
-        stacked = torch.hstack((embeddings, teams.reshape((-1, 1))))
-        projected = self.body(stacked)
+        projected = self.body(embeddings)
 
         select, select_logp = self.get_select(projected, move_matrices)
         target, target_logp = self.get_target(projected, move_matrices, select)

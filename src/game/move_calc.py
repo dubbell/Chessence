@@ -16,14 +16,14 @@ def get_moves(board : Board, team : Team) -> np.array:
     """Get available moves as a 64x64 move matrix.
        checkmate -> None
        stalemate/draw -> move_matrix with all 0's
-       available moves -> move_matrix with some 1's"""
+       available moves -> move_matrix with some 1's (regular move) and/or 2's (pawn promotion move)"""
 
     # Indices are 1D representation of squares on 8x8 board. [i, j] = 1 if piece at i can move to j
     move_matrix = np.zeros((64, 64)).astype(np.int32)
-    def can_move(from_coord, to_coord):
+    def can_move(from_coord, to_coord, promote = False):
         select = to_index(from_coord)
         target = to_index(to_coord)
-        move_matrix[select, target] = 1
+        move_matrix[select, target] = 1 if not promote else 2
 
     # all 0's in move_matrix -> draw
     if board.check_threefold() or board.check_50_move_rule():
@@ -64,7 +64,7 @@ def get_moves(board : Board, team : Team) -> np.array:
                     is_valid_move(board, king, to_coord):
                 can_move(king.coord, to_coord)
         
-    # CHECKMATE
+    # CHECKMATE (king in check and king has no moves)
     if in_check and (move_matrix == 0).all():
         return None
 
@@ -77,13 +77,13 @@ def get_moves(board : Board, team : Team) -> np.array:
         can_move(king.coord, [king_rank, 2])
 
     # PAWN MOVES
-    pawn_dir, pawn_start = (-1, 6) if team == WHITE else (1, 1)
+    pawn_dir, pawn_start, promote_rank = (-1, 6, 1) if team == WHITE else (1, 1, 6)
     for pawn in board.of_team_and_type(team, PAWN):
         pawn_advance = pawn.coord + [pawn_dir, 0]
         if within_bounds(*pawn_advance) and \
                 is_empty(pawn_advance) and \
                 is_valid_move(board, pawn, pawn_advance):
-            can_move(pawn.coord, pawn_advance)
+            can_move(pawn.coord, pawn_advance, pawn.coord[0] == promote_rank)
             pawn_advance2 = pawn.coord + [2 * pawn_dir, 0]
             if pawn.coord[0] == pawn_start and is_empty(pawn_advance2):
                 can_move(pawn.coord, pawn_advance2)
@@ -92,7 +92,7 @@ def get_moves(board : Board, team : Team) -> np.array:
             if within_bounds(*pawn_take) and \
                     (is_opponent(pawn_take) or is_en_passant(pawn_take)) and \
                     is_valid_move(board, pawn, pawn_take):
-                can_move(pawn.coord, pawn_take)
+                can_move(pawn.coord, pawn_take, pawn.coord[0] == promote_rank)
         
     # KNIGHT MOVES
     for knight in board.of_team_and_type(team, KNIGHT):

@@ -223,13 +223,17 @@ class Board:
         return False
         
 
-    def get_state(self) -> np.array:
+    def get_state(self, team : Team) -> np.array:
         # each channel (in dim 2) represents a team/piece_type pair
         state = np.zeros((16, 8, 8), dtype=np.float32)
 
         for piece in self.pieces:
-            channel_index = (0 if piece.team == WHITE else 8) + piece.piece_type.value
+            channel_index = (0 if piece.team == team else 8) + piece.piece_type.value
             state[channel_index, *piece.coord] = 1
+        
+        # States are observed such that the agent's and opponent's pieces are on the same side.
+        if team == BLACK:
+            state = state[:, ::-1, ::-1]
         
         return state
     
