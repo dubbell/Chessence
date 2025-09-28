@@ -212,3 +212,46 @@ def test_en_passant(team, pawn_dir, rank):
     assert (pawn.coord == [rank, 4]).all()
     assert board.coord_map.get((rank, 4)) == pawn
     assert (board.get_state() == prev_state).all()
+
+
+@pytest.mark.parametrize("team,pawn_dir,start_rank,promote", [(team, pawn_dir, start_rank, promote) for team, pawn_dir, start_rank in [(WHITE, -1, 1), (BLACK, 1, 6)] for promote in range(4)])
+def test_promote(team, pawn_dir, start_rank, promote):
+    promote_piece_type = [QUEEN, ROOK, BISHOP, KNIGHT][promote]
+
+    board = Board()
+    pawn = board.add_piece(PAWN, team, start_rank, 4)
+    other_queen = board.add_piece(QUEEN, other_team(team), start_rank + pawn_dir, 5)
+
+    prev_state = board.get_state()
+
+    undo = board.move_piece(Move(pawn, pawn.coord + [pawn_dir, 0], promote))
+
+    assert board.coord_map.get((start_rank, 4)) is None
+    assert board.coord_map[start_rank + pawn_dir, 4] == pawn
+    assert pawn.piece_type == promote_piece_type
+    assert board.coord_map[start_rank + pawn_dir, 4].piece_type == promote_piece_type
+    assert not (board.get_state() == prev_state).all()
+
+    undo()
+
+    assert board.coord_map[start_rank, 4] == pawn
+    assert board.coord_map.get((start_rank + pawn_dir, 4)) is None
+    assert pawn.piece_type == PAWN
+    assert board.coord_map[start_rank, 4].piece_type == PAWN
+    assert (board.get_state() == prev_state).all()
+    
+    undo = board.move_piece(Move(pawn, other_queen.coord, promote))
+
+    assert board.coord_map.get((start_rank, 4)) is None
+    assert board.coord_map[*other_queen.coord] == pawn
+    assert pawn.piece_type == promote_piece_type
+    assert board.coord_map[*other_queen.coord].piece_type == promote_piece_type
+    assert not (board.get_state() == prev_state).all()
+
+    undo()
+
+    assert board.coord_map[start_rank, 4] == pawn
+    assert board.coord_map[*other_queen.coord] == other_queen
+    assert pawn.piece_type == PAWN
+    assert board.coord_map[start_rank, 4].piece_type == PAWN
+    assert (board.get_state() == prev_state).all()
