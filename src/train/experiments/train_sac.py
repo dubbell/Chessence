@@ -23,6 +23,7 @@ def take_action(current_state : np.array, move_matrix : np.array, board : Board,
     Input: the board, the agent, and the agent's team
     Output: next state, next move matrix, action
     """
+    assert not (move_matrix == 0).all(), f"no moves available, \n{board}"
     action = agent.sample_actions(current_state, move_matrix)[:3]  # ignore logp
 
     select = np.concatenate(np.unravel_index(action[0], (8, 8)))
@@ -97,7 +98,7 @@ def start_training(config):
         if next_move_matrix is None or (next_move_matrix == 0).all():
             # checkmate
             if next_move_matrix is None:
-                replay_buffer.insert(state, next_state, move_matrix, next_move_matrix, *action, 50, True)
+                replay_buffer.insert(state, next_state, move_matrix, torch.zeros((64, 64)), *action, 50, True)
             # draw
             else:
                 replay_buffer.insert(state, next_state, move_matrix, next_move_matrix, *action, -20, True)
@@ -109,6 +110,7 @@ def start_training(config):
             white_agent, black_agent = black_agent, white_agent
             state = board.get_state(current_team)
             move_matrix = get_moves(board, current_team)
+            assert not (move_matrix == 0).all(), f"{board.check_50_move_rule()}, {board.check_threefold()}"
             
             game_count += 1
             pb.update()

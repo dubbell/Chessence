@@ -145,19 +145,20 @@ class Actor(nn.Module):
         assert projected.shape[1:] == (512,), projected.shape
         assert move_matrices.shape[1:] == (64, 64), move_matrices.shape
 
-        select_filter = move_matrices.any(axis=2)
-        if (select_filter == 0).all():
-            select_logits = torch.zeros_like(select_filter).float()
-        else:
-            select_logits = self.selector(projected)
-            select_logits.masked_fill_(~select_filter, float('-inf'))
+        select_logits = self.selector(projected)
+        
+        select_filter = move_matrices.any(dim=2)
+        valid_select = select_filter.any(dim=1)  # at least 1 valid selection
+
+        select_logits[valid_select] = select_logits[valid_select].masked_fill(~select_filter[valid_select], float('-inf'))
+        select_logits[~valid_select] = 0.0  # if no valid selections, uniform distribution
 
         if self.exploring:
             distr = Categorical(logits=select_logits)
             select = distr.sample()
             logp = distr.log_prob(select)
         else:
-            select = select_logits.argmax(axis=1).long()
+            select = select_logits.argmax(dim=1).long()
             logp = F.log_softmax(select_logits, dim=1)[torch.arange(select.shape[0]), select]
 
         return select, logp
@@ -167,12 +168,13 @@ class Actor(nn.Module):
         assert move_matrices.shape[1:] == (64, 64), move_matrices.shape
         assert select.dim() == 1, select.shape
 
+        target_logits = self.targeter(torch.hstack((projected, F.one_hot(select, 64))))
+
         target_filter = move_matrices[torch.arange(select.shape[0]), select] > 0
-        if (target_filter == 0).all():
-            target_logits = torch.zeros_like(target_filter).float()
-        else:
-            target_logits = self.targeter(torch.hstack((projected, F.one_hot(select, 64))))
-            target_logits.masked_fill_(~target_filter, float('-inf'))
+        valid_target = target_filter.any(dim=1)  # at least 1 valid target
+
+        target_logits[valid_target] = target_logits[valid_target].masked_fill(~target_filter[valid_target], float('-inf'))
+        target_logits[~valid_target] = 0.0  # if no valid target, uniform distribution
 
         if self.exploring:
             distr = Categorical(logits=target_logits)
@@ -200,8 +202,8 @@ class Actor(nn.Module):
             promote = promote_logits.argmax(axis=1).long()
             promote_logp = torch.log_softmax(promote_logits, dim=1)[torch.arange(promote.shape[0]), promote]
 
-        promote.masked_fill_(~promote_filter, -1)
-        promote_logp.masked_fill_(~promote_filter, 0)
+        promote = promote.masked_fill(~promote_filter, -1)
+        promote_logp = promote_logp.masked_fill(~promote_filter, 0)
 
         return promote, promote_logp
 

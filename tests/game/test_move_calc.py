@@ -42,7 +42,7 @@ def test_king_moves(king_coord):
 
     move_matrix = get_moves(board, WHITE)
 
-    board_state = board.get_state()
+    board_state = board.get_state(WHITE)
 
     true_moves = [Move(king_piece, move) for move in king_coord + [
             [rank_diff, file_diff]
@@ -51,7 +51,7 @@ def test_king_moves(king_coord):
             if rank_diff != 0 or file_diff != 0]
         if within_bounds(*move)]
 
-    assert (board_state == board.get_state()).all(), "board state not reversed"
+    assert (board_state == board.get_state(WHITE)).all(), "board state not reversed"
 
     move_matrix_contains_exactly(move_matrix, true_moves)
 

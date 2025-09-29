@@ -132,6 +132,8 @@ class Board:
             self.en_passant = to_coord
         else:
             self.en_passant = None
+        
+        
 
         # REMOVE AT TARGET LOCATION
         was_capture, undo_remove = self.remove_piece_at(*to_coord)
@@ -145,11 +147,12 @@ class Board:
         is_castle = piece.piece_type == KING and (piece.coord == [king_rank, 4]).all() and ((to_coord == [king_rank, 6]).all() or (to_coord == [king_rank, 2]).all())
         if is_castle:
             king_castle = (to_coord == [king_rank, 6]).all()
-            assert (king_castle and self.king_side_castle[piece.team]) or (not king_castle and self.queen_side_castle[piece.team]), "castle move not available"
+            assert (king_castle and self.king_side_castle[piece.team]) or (not king_castle and self.queen_side_castle[piece.team]), \
+                f"castle move not available, {piece}, {to_coord}, {self.king_side_castle[piece.team]}, {self.queen_side_castle[piece.team]}, \n{self.__repr__()}"
             old_rook_coord = np.array([king_rank, 7] if king_castle else [king_rank, 0])
             new_rook_coord = np.array([king_rank, 5] if king_castle else [king_rank, 3])
             rook_piece = self.coord_map.pop(tuple(old_rook_coord), None)
-            assert rook_piece is not None and rook_piece.piece_type == ROOK and rook_piece.team == piece.team
+            assert rook_piece is not None and rook_piece.piece_type == ROOK and rook_piece.team == piece.team, rook_piece
             self.coord_map[*new_rook_coord] = rook_piece
             rook_piece.coord = new_rook_coord
         
@@ -158,6 +161,23 @@ class Board:
                 self.coord_map[*old_rook_coord] = rook_piece
                 self.coord_map.pop(tuple(new_rook_coord), None)
                 rook_piece.coord = old_rook_coord
+            
+        # CAN CASTLE STATE UPDATE
+        if (piece.coord == [king_rank, 0]).all() and piece.piece_type == ROOK or piece.piece_type == KING:
+            previous_queen_castle_state = self.queen_side_castle[piece.team]
+            self.queen_side_castle[piece.team] = False
+            def undo_queen_castle_state():
+                self.queen_side_castle[piece.team] = previous_queen_castle_state
+        else:
+            undo_queen_castle_state = lambda: 0
+
+        if (piece.coord == [king_rank, 7]).all() and piece.piece_type == ROOK or piece.piece_type == KING:
+            previous_king_castle_state = self.king_side_castle[piece.team]
+            self.king_side_castle[piece.team] = False
+            def undo_king_castle_state():
+                self.king_side_castle[piece.team] = previous_king_castle_state
+        else:
+            undo_king_castle_state = lambda: 0
 
         # MOVE PIECE TO TARGET LOCATION
         old_piece_coord = piece.coord
@@ -196,7 +216,7 @@ class Board:
                 self.team_and_type_map[piece.team][PAWN].append(piece)
 
         def undo():
-            for undo_func in [undo_en_passant_state, undo_cache, undo_move, undo_castle, undo_remove, undo_en_passant, undo_promote]:
+            for undo_func in [undo_en_passant_state, undo_cache, undo_king_castle_state, undo_queen_castle_state, undo_move, undo_castle, undo_remove, undo_en_passant, undo_promote]:
                 undo_func()
 
         return undo
@@ -244,6 +264,7 @@ class Board:
             self.remove_piece_at(*self.pieces[0].coord)
 
         self.cache = []
+        self.non_pawn_or_capture_moves = 0
 
         for file in range(8):
             self.add_piece(PIECE_TYPE_ORDER[file], BLACK, 0, file)

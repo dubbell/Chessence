@@ -67,6 +67,8 @@ def get_moves(board : Board, team : Team) -> np.array:
     # CHECKMATE (king in check and king has no moves)
     if in_check and (move_matrix == 0).all():
         return None
+    elif in_check:  # if in check but king has moves, then only king moves are available
+        return move_matrix
 
     # CASTLING
     king_castle, queen_castle = can_castle(board, team)

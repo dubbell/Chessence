@@ -112,8 +112,13 @@ class SAC:
         if explore:
             self.explore()
 
-        embedding = self.encoder(board_states)
-        return self.actor(embedding, move_matrices)
+        embedding = self.encoder.forward(board_states)
+        select, target, promote, logp = self.actor.forward(embedding, move_matrices)
+
+        for move_matrix, s, t in zip(move_matrices, select, target):
+            assert move_matrix[s, t] != 0 or (move_matrix == 0).all(), f"sampled select, target impossible: {np.unravel_index([s, t], (8, 8))}"
+
+        return select, target, promote, logp
 
 
     def actor_alpha_train_step(self, batch : Batch):
@@ -130,7 +135,7 @@ class SAC:
         alpha_loss = self.alpha_loss_func.forward(alpha, logp.detach(), self.target_entropy)
 
         # train actor (critic parameters are detached)
-        q1, q2 = self.critic.forward(embeddings, batch.teams, select, target, promote)
+        q1, q2 = self.critic.forward(embeddings, select, target, promote)
         sampled_q = torch.minimum(q1, q2)
         actor_loss = self.actor_loss_func.forward(alpha.detach(), logp, sampled_q.detach())
 
@@ -167,7 +172,7 @@ class SAC:
 
             # target q, filtered by whether the next state is terminating
             # second term negated because move is made by opponent (minimax)
-            target_q = batch.rewards + self.gamma * (1 - batch.done) * (-next_q)
+            target_q = batch.rewards + self.gamma * (~batch.done) * (-next_q)
 
         critic_loss1 = self.mse_loss_func(q1, target_q)
         critic_loss2 = self.mse_loss_func(q2, target_q)
