@@ -88,8 +88,13 @@ class SAC:
         self.actor.eval()
         self.critic.eval()
 
+    def explore(self):
+        self.actor.explore()
+
+    def exploit(self):
+        self.actor.exploit()
     
-    def sample_actions(self, board_states, move_matrices, eval = False) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def sample_actions(self, board_states, move_matrices, explore = True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Sample one or more actions from agent.
 
@@ -103,10 +108,9 @@ class SAC:
         """
         board_states, move_matrices = validate_tensors([board_states, move_matrices], [4, 3])
         
-        if eval:
-            self.eval()
-        else:
-            self.train()
+        self.eval()
+        if explore:
+            self.explore()
 
         embedding = self.encoder(board_states)
         return self.actor(embedding, move_matrices)
@@ -186,6 +190,7 @@ class SAC:
         
     def train_step(self, batch : Batch):
         self.train()
+        self.explore()
 
         actor_log_info = self.actor_alpha_train_step(batch)
         critic_log_info = self.critic_train_step(batch, actor_log_info["alpha"])

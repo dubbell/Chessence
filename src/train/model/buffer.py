@@ -45,7 +45,6 @@ class ReplayBuffer(Dataset):
         idx = idx % self.length
         return (*self.buffer[idx],)
 
-
     def stack_tensor(self, values):
         return torch.stack(values).squeeze().to(device=self.device)
 

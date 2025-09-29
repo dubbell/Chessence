@@ -5,8 +5,8 @@ from game.utils import within_bounds, to_index
 from game.check_valid import can_castle, is_valid
 
 
-def is_valid_move(board : Board, piece : Piece, to_coord : np.array) -> bool:
-    undo_move = board.move_piece(Move(piece, to_coord))
+def is_valid_move(board : Board, piece : Piece, to_coord : np.array, promote = -1) -> bool:
+    undo_move = board.move_piece(Move(piece, to_coord, promote))
     move_is_valid = is_valid(board, piece.team)
     undo_move()
     return move_is_valid
@@ -82,7 +82,7 @@ def get_moves(board : Board, team : Team) -> np.array:
         pawn_advance = pawn.coord + [pawn_dir, 0]
         if within_bounds(*pawn_advance) and \
                 is_empty(pawn_advance) and \
-                is_valid_move(board, pawn, pawn_advance):
+                is_valid_move(board, pawn, pawn_advance, 0 if pawn.coord[0] == promote_rank else -1):
             can_move(pawn.coord, pawn_advance, pawn.coord[0] == promote_rank)
             pawn_advance2 = pawn.coord + [2 * pawn_dir, 0]
             if pawn.coord[0] == pawn_start and is_empty(pawn_advance2):
@@ -91,7 +91,7 @@ def get_moves(board : Board, team : Team) -> np.array:
         for pawn_take in pawn.coord + [[pawn_dir, -1], [pawn_dir, 1]]:
             if within_bounds(*pawn_take) and \
                     (is_opponent(pawn_take) or is_en_passant(pawn_take)) and \
-                    is_valid_move(board, pawn, pawn_take):
+                    is_valid_move(board, pawn, pawn_take, 0 if pawn.coord[0] == promote_rank else -1):
                 can_move(pawn.coord, pawn_take, pawn.coord[0] == promote_rank)
         
     # KNIGHT MOVES

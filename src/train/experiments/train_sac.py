@@ -55,17 +55,16 @@ def start_training(config):
 
     board = Board()
     board.reset()
-    en_passant = None
 
-    state = board.get_state()
-    move_matrix = get_moves(board, WHITE)
+    current_team = WHITE
+    state = board.get_state(current_team)
+    move_matrix = get_moves(board, current_team)
 
     train_agent, fixed_agent = SAC(), SAC()
     white_agent, black_agent = train_agent, fixed_agent
 
     train_steps_remaining = 0
     game_count = 0
-    current_team = WHITE
 
     if config["enable_logging"]:
         mlflow.log_params({
@@ -105,9 +104,9 @@ def start_training(config):
             
             # reset board and switch teams
             board.reset()
+
             current_team = WHITE
             white_agent, black_agent = black_agent, white_agent
-
             state = board.get_state(current_team)
             move_matrix = get_moves(board, current_team)
             

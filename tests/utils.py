@@ -38,4 +38,4 @@ def get_dummy_move_matrices(n):
     return torch.zeros((n, 64, 64)).float()
 
 def get_dummy_state_embeddings(n):
-    return torch.zeros((n, 511)).float()
+    return torch.zeros((n, 512)).float()

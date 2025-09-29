@@ -2,6 +2,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 from torch import Tensor
+from torch.distributions import Categorical
+
 from collections import namedtuple
 from train.utils import tensor_check, to_ndim
 
@@ -40,12 +42,14 @@ class StateEncoder(nn.Module):
             SimpleConv(32, 64, False), # outputs 4x4 
             SimpleConv(64, 64, False), # outputs 3x3
             SimpleConv(64, 128, False), # outputs 2x2
-            SimpleConv(128, 512, False), # outputs 1x1
+            nn.Conv2d(128, 512, kernel_size=2, stride=1), # outputs 1x1
             nn.Flatten())
     
-    def forward(self, board_state : Tensor) -> Tensor:
-        board_state = to_ndim(tensor_check(board_state), 4)
-        return self.conv(board_state)
+    def forward(self, board_states : Tensor) -> Tensor:
+        board_states = to_ndim(tensor_check(board_states), 4)
+        assert board_states.shape[1:] == (16, 8, 8)
+
+        return self.conv(board_states)
 
 
 class Critic(nn.Module):
@@ -104,6 +108,8 @@ class Actor(nn.Module):
     def __init__(self):
         super().__init__()
 
+        self.exploring = False
+
         self.body = nn.Sequential(
             nn.Linear(512, 512), 
             nn.Dropout(p=0.2),
@@ -128,18 +134,33 @@ class Actor(nn.Module):
             nn.Linear(640, 512),
             nn.ReLU(),
             nn.Linear(512, 4))
+        
+    def explore(self):
+        self.exploring = True
+
+    def exploit(self):
+        self.exploring = False
     
     def get_select(self, projected, move_matrices):
         assert projected.shape[1:] == (512,), projected.shape
         assert move_matrices.shape[1:] == (64, 64), move_matrices.shape
 
         select_filter = move_matrices.any(axis=2)
-        select_logits = self.selector(projected)
-        select_logits.masked_fill_(~select_filter, float('-inf'))
-        select = select_logits.argmax(axis=1)
-        logp = F.log_softmax(select_logits, dim=1)[torch.arange(select.shape[0]), select]
+        if (select_filter == 0).all():
+            select_logits = torch.zeros_like(select_filter).float()
+        else:
+            select_logits = self.selector(projected)
+            select_logits.masked_fill_(~select_filter, float('-inf'))
 
-        return select.long(), logp
+        if self.exploring:
+            distr = Categorical(logits=select_logits)
+            select = distr.sample()
+            logp = distr.log_prob(select)
+        else:
+            select = select_logits.argmax(axis=1).long()
+            logp = F.log_softmax(select_logits, dim=1)[torch.arange(select.shape[0]), select]
+
+        return select, logp
     
     def get_target(self, projected, move_matrices, select):
         assert projected.shape[1:] == (512,), projected.shape
@@ -147,12 +168,21 @@ class Actor(nn.Module):
         assert select.dim() == 1, select.shape
 
         target_filter = move_matrices[torch.arange(select.shape[0]), select] > 0
-        target_logits = self.targeter(torch.hstack((projected, F.one_hot(select, 64))))
-        target_logits.masked_fill_(~target_filter, float('-inf'))
-        target = target_logits.argmax(axis=1)
-        logp = F.log_softmax(target_logits, dim=1)[torch.arange(target.shape[0]), target]
+        if (target_filter == 0).all():
+            target_logits = torch.zeros_like(target_filter).float()
+        else:
+            target_logits = self.targeter(torch.hstack((projected, F.one_hot(select, 64))))
+            target_logits.masked_fill_(~target_filter, float('-inf'))
 
-        return target.long(), logp
+        if self.exploring:
+            distr = Categorical(logits=target_logits)
+            target = distr.sample()
+            logp = distr.log_prob(target)
+        else:
+            target = target_logits.argmax(axis=1).long()
+            logp = F.log_softmax(target_logits, dim=1)[torch.arange(target.shape[0]), target]
+
+        return target, logp
 
     def get_promote(self, projected, move_matrices, select, target):
         assert projected.shape[1:] == (512,), projected.shape
@@ -162,12 +192,18 @@ class Actor(nn.Module):
                
         promote_filter = move_matrices[torch.arange(select.shape[0]), select, target] == 2
         promote_logits = self.promoter(torch.hstack((projected, F.one_hot(select, 64), F.one_hot(target, 64))))
-        promote = promote_logits.argmax(axis=1).long()
+        if self.exploring:
+            distr = Categorical(logits=promote_logits)
+            promote = distr.sample()
+            promote_logp = distr.log_prob(promote)
+        else:
+            promote = promote_logits.argmax(axis=1).long()
+            promote_logp = torch.log_softmax(promote_logits, dim=1)[torch.arange(promote.shape[0]), promote]
+
         promote.masked_fill_(~promote_filter, -1)
-        promote_logp = torch.log_softmax(promote_logits, dim=1)[torch.arange(promote.shape[0]), promote]
         promote_logp.masked_fill_(~promote_filter, 0)
 
-        return promote.long(), promote_logp
+        return promote, promote_logp
 
     
     def forward(self, embeddings : Tensor, move_matrices : Tensor):

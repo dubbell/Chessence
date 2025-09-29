@@ -118,7 +118,7 @@ class Board:
         piece, to_coord, promote = move.piece, move.to_coord, move.promote
 
         # CACHE UPDATE
-        self.cache.append(self.get_state())
+        self.cache.append(self.get_state(WHITE))
         def undo_cache():
             self.cache.pop()
 
@@ -212,7 +212,7 @@ class Board:
     def check_threefold(self):
         """Check for threefold repetition."""
         count = 0
-        current_state = self.get_state()
+        current_state = self.get_state(WHITE)
         for cached_state in self.cache:            
             # if the same position is found twice in cache, then the same position was reached 3 times in total, thus threefold repetition
             if (cached_state == current_state).all():
@@ -233,7 +233,7 @@ class Board:
         
         # States are observed such that the agent's and opponent's pieces are on the same side.
         if team == BLACK:
-            state = state[:, ::-1, ::-1]
+            state = state[:, ::-1, ::-1].copy()
         
         return state
     
