@@ -6,7 +6,7 @@ from game.check_valid import can_castle, is_valid
 
 
 def is_valid_move(board : Board, piece : Piece, to_coord : np.array, promote = -1) -> bool:
-    undo_move = board.move_piece(Move(piece, to_coord, promote))
+    undo_move, _ = board.move_piece(Move(piece, to_coord, promote))
     move_is_valid = is_valid(board, piece.team)
     undo_move()
     return move_is_valid

@@ -10,6 +10,7 @@ import numpy as np
 
 PIECE_TYPE_ORDER = [ROOK, KNIGHT, BISHOP, QUEEN, KING, BISHOP, KNIGHT, ROOK]
 
+CAPTURE_REWARDS = { KING : 0, QUEEN : 9, ROOK : 5, BISHOP : 3, KNIGHT : 3, PAWN : 1 }
 
 class Board:
     # all pieces on the board
@@ -45,6 +46,8 @@ class Board:
             { team : { piece_type : [] 
                        for piece_type in [KING, QUEEN, ROOK, BISHOP, KNIGHT, PAWN] } 
               for team in [WHITE, BLACK] }
+
+        self.game_started = False
         
 
     def __repr__(self):
@@ -100,7 +103,7 @@ class Board:
         piece = self.coord_map.pop((rank, file), None)
 
         if piece is None:
-            return False, lambda: 0
+            return False, 0, lambda: 0
         
         # remove references
         self.pieces.remove(piece)
@@ -111,7 +114,7 @@ class Board:
             self.pieces.append(piece)
             self.team_and_type_map[piece.team][piece.piece_type].append(piece)
 
-        return True, undo_remove
+        return True, CAPTURE_REWARDS[piece.piece_type], undo_remove
     
 
     def move_piece(self, move : Move):
@@ -132,11 +135,9 @@ class Board:
             self.en_passant = to_coord
         else:
             self.en_passant = None
-        
-        
 
         # REMOVE AT TARGET LOCATION
-        was_capture, undo_remove = self.remove_piece_at(*to_coord)
+        was_capture, capture_reward, undo_remove = self.remove_piece_at(*to_coord)
         if was_capture or piece.piece_type == PAWN:
             self.non_pawn_or_capture_moves = 0
         else:
@@ -193,7 +194,7 @@ class Board:
         pawn_dir = -1 if piece.team == WHITE else 1
         is_en_passant = previous_en_passant is not None and (previous_en_passant + [pawn_dir, 0] == to_coord).all() and piece.piece_type == PAWN
         if is_en_passant:
-            _, undo_en_passant = self.remove_piece_at(*previous_en_passant)
+            _, capture_reward, undo_en_passant = self.remove_piece_at(*previous_en_passant)
         else:
             undo_en_passant = lambda: 0
 
@@ -219,7 +220,7 @@ class Board:
             for undo_func in [undo_en_passant_state, undo_cache, undo_king_castle_state, undo_queen_castle_state, undo_move, undo_castle, undo_remove, undo_en_passant, undo_promote]:
                 undo_func()
 
-        return undo
+        return undo, capture_reward
 
 
     def check_50_move_rule(self):
@@ -274,3 +275,5 @@ class Board:
         
         self.king_side_castle = { WHITE : True, BLACK : True }
         self.queen_side_castle = { WHITE : True, BLACK : True }
+
+        self.game_started = True

@@ -53,8 +53,15 @@ def is_valid(board : Board, team : Team):
     """Check if current position is valid after a move made by `team`. Determined by whether `team` king is in check."""
     king = board.get_king(team)
     if king is None:
-        return True
+        if not board.game_started:
+            return True
+        else:
+            return False
+    
     opponent = other_team(team)
+    if board.get_king(opponent) is None and board.game_started:
+        return False
+
     return not is_controlled(board, king.coord, opponent)
 
 
@@ -73,6 +80,10 @@ def can_castle(board : Board, team : Team):
                 king_castle = False
                 break
         
+        maybe_rook = board.coord_map.get((king_rank, 7))
+        if maybe_rook is None or maybe_rook.piece_type != ROOK and maybe_rook.team != team:
+            king_castle = False
+        
     if queen_castle:
         for coord in np.array([[king_rank, file] for file in range(2, 4)]):
             if board.coord_map.get(tuple(coord), None) is not None or is_controlled(board, coord, opponent):
@@ -80,6 +91,10 @@ def can_castle(board : Board, team : Team):
                 break
 
         if board.coord_map.get((king_rank, 1), None) is not None:
+            queen_castle = False
+        
+        maybe_rook = board.coord_map.get((king_rank, 0))
+        if maybe_rook is None or maybe_rook.piece_type != ROOK and maybe_rook.team != team:
             queen_castle = False
     
     return king_castle, queen_castle

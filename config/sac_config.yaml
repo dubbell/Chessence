@@ -2,7 +2,7 @@ algorithm: SAC
 total_games: 20000
 checkpoint: false
 train_start: 100
-train_steps_per_game: 1
+train_steps_per_game: 2
 update_interval: 1000
 enable_logging: True
-batch_size: 128
+batch_size: 512

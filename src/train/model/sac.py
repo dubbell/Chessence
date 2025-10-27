@@ -10,7 +10,7 @@ from train.model.buffer import Batch
 from train.utils import validate_tensors
 
 
-torch.autograd.set_detect_anomaly(True)
+# torch.autograd.set_detect_anomaly(True)
 
 class AlphaLoss(nn.Module):
     def __init__(self):
@@ -134,10 +134,10 @@ class SAC:
         alpha = torch.exp(self.log_alpha)
         alpha_loss = self.alpha_loss_func.forward(alpha, logp.detach(), self.target_entropy)
 
-        # train actor (critic parameters are detached)
+        # train actor
         q1, q2 = self.critic.forward(embeddings, select, target, promote)
         sampled_q = torch.minimum(q1, q2)
-        actor_loss = self.actor_loss_func.forward(alpha.detach(), logp, sampled_q.detach())
+        actor_loss = self.actor_loss_func.forward(alpha.detach(), logp, sampled_q)
 
         total_loss = alpha_loss + actor_loss
         total_loss.backward()
